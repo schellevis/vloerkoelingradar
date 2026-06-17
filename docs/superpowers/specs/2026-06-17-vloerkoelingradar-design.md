@@ -33,7 +33,7 @@ context).
 - **Aanbevolen (koudst toegestane) aanvoertemperatuur** = `max(Td + marge, min_temp)`.
   Toon als _"houd je aanvoer boven X °C"_. Marge en `min_temp` instelbaar.
 - **Kleur/oordeel op basis van het dauwpunt `Td`** (drempels voorlopig, eenvoudig
-  te tunen — staan als constanten in de code):
+  te tunen — staan als configuratie in `web/config.js`):
 
   | Dauwpunt `Td` | Oordeel | Kleur |
   |---|---|---|
@@ -45,7 +45,15 @@ context).
   Onderbouwing: met de default-marge van 2 °C komt dauwpunt 18 °C overeen met een
   aanbevolen aanvoer van 20 °C — de praktijkgrens die de gebruiker zelf aanhoudt.
   Bronnen bevestigen een veiligheidsmarge van 2–3 °C en een praktische
-  ondergrens van 16–18 °C voor vloerkoeling.
+  ondergrens van 16–18 °C voor vloerkoeling:
+  - Benelux Vloerverwarming — min. aanvoer ~16–18 °C voor vloerkoeling:
+    <https://beneluxvloerverwarming.com/koelen-met-vloerverwarming/>
+  - Airco.One — dauwpunt/condensatie, condens al mogelijk bij 18–19 °C op warme,
+    vochtige dagen:
+    <https://airco.one/koelen-met-een-warmtepomp-belangrijke-aandachtspunten-voor-comfort-en-condensatie/>
+  - Price Industries — veiligheidsmarge van ~2–3 °C tussen gekoeld oppervlak en
+    dauwpunt:
+    <https://blog.priceindustries.com/prevent-condensation-from-becoming-a-design-flaw>
 
 ## Architectuur
 
@@ -63,13 +71,21 @@ Twee losse delen, gekoppeld via één JSON-bestand:
   lon), gespreid over alle 12 provincies. Eén bron van waarheid voor de
   forecast-punten.
 - `scripts/fetch_forecast.py` —
-  - Haalt per locatie (gebatcht: Open-Meteo accepteert komma-gescheiden
-    lat/lon-lijsten) uurlijkse `temperature_2m` + `dew_point_2m` op, ~4 dagen,
+  - Haalt uurlijkse `temperature_2m` + `dew_point_2m` op, ~4 dagen,
     `timezone=Europe/Amsterdam`, model `knmi_seamless`.
+  - **Batching:** Open-Meteo accepteert komma-gescheiden lat/lon-lijsten; we
+    batchen in groepen van **~25 locaties** per call. Per batch een **retry met
+    backoff** (bv. 3 pogingen). Faalt een batch definitief of komt incomplete
+    data terug → **behoud de bestaande `forecast.json`** en breek af met een
+    duidelijke foutmelding (nooit een half/leeg bestand committen).
   - Schrijft `data/forecast.json`. Doel: zo compact mogelijk.
   - Alleen ruwe grootheden opslaan (dauwpunt + temp). **Kleur/oordeel rekent de
     client** zodat de marge/min-temp-instellingen live werken.
   - Afronden op 1 decimaal; uurtijden 1× centraal opslaan (niet per plaats).
+  - **Tijd-labels:** `hours` bevat lokale Europe/Amsterdam-labels zonder offset
+    (zoals Open-Meteo ze levert). De spec en de client behandelen ze expliciet
+    als lokale wandklok-tijd, **niet** als UTC. DST-overgangen volgen het label
+    van de bron (geen eigen herberekening).
   - Houdt het op stdlib waar mogelijk (`urllib`), minimale dependencies.
 
 `forecast.json` (vorm):
@@ -98,7 +114,9 @@ Vanilla HTML/CSS/JS, **geen build, geen framework, geen externe libraries**.
 
 Modules in `app.js` (kleine, geïsoleerde eenheden):
 
-- **data** — laadt `forecast.json` (met cache-busting op `generated_at`).
+- **data** — laadt `data/forecast.json` met `fetch(url, { cache: "no-store" })`
+  plus een `?v=<timestamp>`-query als extra cache-buster (we kennen
+  `generated_at` immers pas ná het laden). Toont daarna `generated_at` in de UI.
 - **model** — dauwpunt → kleur/oordeel; aanbevolen aanvoer = `max(Td+marge, min_temp)`.
 - **location** — zoeken, geolocatie, klik-op-stip; haversine naar dichtstbijzijnde
   forecast-punt; lees/schrijf gekozen plek + instellingen in `localStorage`.
@@ -110,12 +128,20 @@ Modules in `app.js` (kleine, geïsoleerde eenheden):
 
 1. **Locatiekop** — gekozen plaats, knoppen: zoeken, "Gebruik mijn locatie"
    (`navigator.geolocation`; vereist HTTPS — Pages levert dat).
-2. **Nu-oordeel** — gekleurde badge ("Beperkt koelen"), dauwpunt nu, en
-   _"houd je aanvoer boven X °C"_.
+2. **Nu-oordeel** — twee duidelijk gescheiden lagen om verwarring te voorkomen
+   (kleur hangt níet van je instellingen af, het advies wél):
+   - **"Luchtvochtigheidssituatie"** — de gekleurde badge ("Beperkt koelen") +
+     dauwpunt nu. Dit is de algemene dauwpuntklasse, los van instellingen.
+   - **"Jouw aanvoeradvies"** — _"houd je aanvoer boven X °C"_, met
+     `X = max(dauwpunt + marge, min_temp)`. Dit verandert mee met je instellingen.
+   - **Definitie van "nu":** het forecast-uur dat het dichtst bij de huidige
+     lokale tijd ligt (afronden op het dichtstbijzijnde hele uur).
 3. **Komende dagen — dag-ranges (A)** — per dag een balk van laagste → hoogste
    dauwpunt op een gedeelde dauwpunt-schaal (tick-labels 8/12/16/20°, géén losse
    gekleurde schaalbalk). Een bolletje markeert het geselecteerde uur. Balk
-   ingekleurd met de zone-gradient.
+   ingekleurd met de zone-gradient. **"Dag" = lokale kalenderdag** (Europe/
+   Amsterdam, 00:00–23:59); min/max worden over alle uren van die kalenderdag
+   bepaald.
 4. **Exacte voorspelling — uurgrafiek (B)** — dauwpuntlijn per uur over ~4 dagen
    op een **neutrale** achtergrond (alleen dunne hulplijnen, géén gekleurde
    zones). Per dag een **gekleurde badge met het hoogste dauwpunt van die dag**
@@ -126,17 +152,41 @@ Modules in `app.js` (kleine, geïsoleerde eenheden):
 6. **Landelijk kaartje** — zelf-bevattend SVG (NL-grens uit `nl.geo.json`),
    gekleurde stip per forecast-punt op het geselecteerde uur, jouw plek omrand.
    Klik een stip → die plek wordt geselecteerd. Deelt de tijdslider.
+   **Projectie:** één gedeelde lon/lat → SVG-transformatie (eenvoudige
+   equirectangular fit op de NL-bounding-box, met lichte breedtegraad-correctie
+   `cos(lat)` op de x-schaal). De NL-grens én de stippen gebruiken **exact
+   dezelfde** transformatie, zodat punten op de juiste plek liggen.
 7. **Instellingen** — schuif/invoer voor marge en minimale aanvoertemperatuur;
    bewaard in `localStorage`.
 8. **Disclaimer** — tekst uit de README (model met onzekerheid; lokale
    condensbeveiliging blijft leidend).
 
+## Toegankelijkheid & responsiveness
+
+De UI is SVG-zwaar; kleur mag nooit de enige informatiedrager zijn.
+
+- **Niet alleen kleur:** elk oordeel heeft ook een tekstlabel ("Beperkt koelen")
+  en het dauwpunt-getal. Stippen/badges krijgen een tooltip/label met plaats +
+  dauwpunt + oordeel.
+- **Toetsenbord:** tijdslider bedienbaar met pijltjes; zoekveld en
+  afspeelknop/instellingen volledig tab- en enter-bedienbaar.
+- **ARIA:** icon-knoppen ("Gebruik mijn locatie", afspelen) krijgen
+  `aria-label`; de grafiek en het kaartje een `role`/`aria-label` met een korte
+  tekstuele samenvatting als fallback.
+- **Responsive:** mobiel-first; layout stapelt netjes op smalle schermen
+  (forecast boven, kaartje onder). SVG's schalen mee.
+
 ## Deployment
 
-- `.github/workflows/forecast.yml`:
-  - **cron elke 6 uur** (+ handmatige trigger): draait `fetch_forecast.py`,
-    commit een gewijzigde `data/forecast.json`.
-  - Deployt de statische site (`web/` + `data/`) naar **GitHub Pages**.
+- `.github/workflows/forecast.yml` — **triggers expliciet beperkt** tot
+  `schedule` (cron elke 6 uur) en `workflow_dispatch` (handmatig). **Géén** push-
+  trigger op `data/**`, zodat de data-commit de workflow niet opnieuw start
+  (geen self-trigger-lus).
+  - Draait `fetch_forecast.py` en **commit `data/forecast.json` alleen als de
+    inhoud daadwerkelijk wijzigt** (`git diff --quiet` check).
+  - Deployt daarna de statische site (`web/` + `data/`) naar **GitHub Pages**.
+  - Een aparte, lichte deploy bij wijzigingen in `web/**` mag via een tweede
+    workflow met een `push`-trigger op `web/**` (los van de data-cron).
 
 ## Aanpasbaarheid (expliciet ontwerpdoel)
 
@@ -176,6 +226,26 @@ doorgronden. Concreet:
 - **Client:** geen/oude `forecast.json` → toon nette melding + tijd van laatste
   update (`generated_at`). Geolocatie geweigerd → val terug op zoeken. Onbekende
   plek in localStorage → val terug op een default-plek.
+
+## Acceptatiecriteria
+
+**Data (`forecast.json`):**
+- `hours`, en per plaats `dewpoint` en `temp`, hebben **gelijke arraylengtes**.
+- Geen `null`/`NaN` in een actieve forecast (anders: bestaande JSON behouden).
+- `generated_at` aanwezig en parsebaar.
+
+**Client:**
+- Toont een **"verouderd"-melding** als `generated_at` ouder is dan **12 uur**.
+- Werkt zonder JS-fouten als geolocatie geweigerd wordt (valt terug op zoeken).
+- Onbekende plek in `localStorage` → valt terug op een default-plek.
+- Slider/zoek/afspelen volledig met toetsenbord bedienbaar.
+
+**Model (unit-getest):**
+- Grenswaarden exact getest: dauwpunt **14.0 / 16.0 / 18.0 °C** vallen in de
+  bedoelde klasse (grens hoort bij de gunstigere of ongunstigere zijde —
+  expliciet vastleggen in de test).
+- `aanbevolen aanvoer = max(Td + marge, min_temp)` klopt incl. de clamp op
+  `min_temp` (bv. laag dauwpunt → uitkomst = `min_temp`).
 
 ## Aannames
 
