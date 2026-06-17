@@ -13,6 +13,9 @@
 - **Geen build-stap, geen frontend-framework, geen externe JS-libraries.** Alles vanilla ESM, bestand opslaan → verversen.
 - **Geen runtime third-party Python-dependencies** in de data-job — alleen stdlib (`urllib`, `json`, `unittest`).
 - **Client raakt Open-Meteo nooit aan** — alleen de Python-job; de browser leest uitsluitend `data/forecast.json`.
+- **Deploy-layout:** de site-root is de inhoud van `web/`. De data-job schrijft naar **`web/data/forecast.json`**; de client gebruikt de relatieve URL **`data/forecast.json`**. Workflows uploaden `path: web`. Zo werkt het identiek lokaal (`python3 -m http.server 8000 --directory web`) en op Pages.
+- **ESM:** `web/package.json` met `{"type":"module"}` zodat zowel de browser als `node --test` de `.js`-modules als ES-modules behandelen.
+- **Styling:** structurele/component-stijlen horen in **CSS-classes** (`web/style.css`); inline `style=""` alleen voor dynamische waarden (posities, breedtes, dauwpunt-kleur). Geen verspreide magische kleuren — kleuren komen uit de CSS-variabelen.
 - **Tijd-labels** in `forecast.json` zijn lokale Europe/Amsterdam-wandklok-labels zonder offset (bv. `"2026-06-17T14:00"`); behandel ze als lokale tijd, nooit als UTC.
 - **Alle tunables** (drempels, kleuren, defaults, schaal, model, dagen) staan in `web/config.js` (JS) en `scripts/places.py` (data) — nergens magische getallen verspreid.
 - **Klassegrens hoort bij de gunstigere (groenere) zijde:** dauwpunt `14.0` → "volop", `16.0` → "gematigd", `18.0` → "beperkt". Implementeer als `dewpoint <= upTo`.
@@ -204,6 +207,17 @@ class TestBuild(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate(fc)
 
+    def test_build_rejects_place_count_mismatch(self):
+        with self.assertRaises(ValueError):
+            build_forecast("t", "m", PLACES, [])  # 1 plaats, 0 hourly
+
+    def test_build_rejects_differing_time_arrays(self):
+        places2 = PLACES + [{"name": "X", "prov": "GR", "lat": 53.0, "lon": 6.0}]
+        hourly2 = HOURLY + [{"time": ["2026-06-17T00:00"],
+                             "temperature_2m": [1.0], "dew_point_2m": [1.0]}]
+        with self.assertRaises(ValueError):
+            build_forecast("t", "m", places2, hourly2)
+
 if __name__ == "__main__":
     unittest.main()
 ```
@@ -228,7 +242,12 @@ def _round1(x):
 def build_forecast(generated_at, model, places, hourly_by_place):
     if not hourly_by_place:
         raise ValueError("geen hourly-data")
+    if len(places) != len(hourly_by_place):
+        raise ValueError(f"places ({len(places)}) != hourly ({len(hourly_by_place)})")
     hours = list(hourly_by_place[0]["time"])
+    for h in hourly_by_place:
+        if list(h["time"]) != hours:
+            raise ValueError("ongelijke time-arrays tussen plaatsen")
     out_places = []
     for place, hourly in zip(places, hourly_by_place):
         out_places.append({
@@ -363,9 +382,11 @@ Expected: FAIL — `ModuleNotFoundError: No module named 'scripts.fetch_forecast
 """Haalt KNMI-uurdata op via Open-Meteo en schrijft data/forecast.json."""
 import json
 import time
+import os
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from scripts.places import PLACES
 from scripts.forecast_build import build_forecast, validate
@@ -421,21 +442,22 @@ def run(out_path, *, fetch_json, now_iso, places=PLACES, model="knmi_seamless"):
     hourly_by_place = fetch_all(places, fetch_json)
     forecast = build_forecast(now_iso, model, places, hourly_by_place)
     validate(forecast)  # raise vóór schrijven -> bestaand bestand blijft intact
+    os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     tmp = out_path + ".tmp"
     with open(tmp, "w") as f:
         json.dump(forecast, f, separators=(",", ":"))
-    import os
     os.replace(tmp, out_path)
     return forecast
 
 
 def _now_amsterdam_iso():
-    return datetime.now(timezone(timedelta(hours=2))).replace(microsecond=0).isoformat()
+    # zoneinfo regelt zomer-/wintertijd correct (geen hardcoded offset).
+    return datetime.now(ZoneInfo("Europe/Amsterdam")).replace(microsecond=0).isoformat()
 
 
 if __name__ == "__main__":
-    run("data/forecast.json", fetch_json=http_fetch_json, now_iso=_now_amsterdam_iso())
-    print("forecast.json geschreven")
+    run("web/data/forecast.json", fetch_json=http_fetch_json, now_iso=_now_amsterdam_iso())
+    print("web/data/forecast.json geschreven")
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
@@ -443,11 +465,11 @@ if __name__ == "__main__":
 Run: `python3 -m unittest tests.test_fetch_forecast -v`
 Expected: PASS (alle 4 tests).
 
-- [ ] **Step 5: Smoke-test tegen de echte API (handmatig, optioneel maar aanbevolen)**
+- [ ] **Step 5: Verplichte smoke-test tegen de echte API**
 
-Run: `python3 -m scripts.fetch_forecast && python3 -m unittest tests.test_forecast_build -v`
-Expected: `data/forecast.json` bestaat, valide JSON, `places` ≈ aantal in `PLACES`.
-Bij netwerkfout in deze omgeving: sla over, CI dekt dit.
+Run: `python3 -m scripts.fetch_forecast && python3 -c "import json;d=json.load(open('web/data/forecast.json'));print(len(d['places']),'plaatsen,',len(d['hours']),'uren')"`
+Expected: `web/data/forecast.json` bestaat, valide JSON, `places` == aantal in `PLACES`, en `hours` is ~96 (4 dagen). Bevestigt tegelijk de batch-response-shape (list) en de `models=knmi_seamless`-parameter.
+(Alleen als deze omgeving écht geen netwerk heeft: noteer dat expliciet en laat CI de eerste echte run doen.)
 
 - [ ] **Step 6: Commit**
 
@@ -497,10 +519,10 @@ jobs:
         run: python -m scripts.fetch_forecast
       - name: Commit forecast if changed
         run: |
-          if ! git diff --quiet -- data/forecast.json; then
+          if ! git diff --quiet -- web/data/forecast.json; then
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add data/forecast.json
+            git add web/data/forecast.json
             git commit -m "chore: update forecast.json [skip ci]"
             git push
           else
@@ -509,7 +531,7 @@ jobs:
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: web
       - uses: actions/deploy-pages@v4
 ```
 
@@ -523,7 +545,7 @@ name: deploy-web
 on:
   push:
     branches: [main]
-    paths: ["web/**", "data/**", ".github/workflows/deploy-web.yml"]
+    paths: ["web/**", ".github/workflows/deploy-web.yml"]
   workflow_dispatch: {}
 permissions:
   pages: write
@@ -539,7 +561,7 @@ jobs:
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: web
       - uses: actions/deploy-pages@v4
 ```
 
@@ -570,6 +592,19 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
   `defaults:{margin,minSupply}`, `dewAxis:{min,max}`, en
   `levels: Array<{upTo:number,key:string,label:string,colorVar:string}>`
   (oplopend op `upTo`, laatste `upTo: Infinity`).
+
+- [ ] **Step 0: Create the ESM marker (`web/package.json`)**
+
+Zonder dit behandelt Node `.js` als CommonJS en falen de `node --test`-imports.
+
+```json
+{
+  "type": "module",
+  "private": true
+}
+```
+
+Schrijf dit naar `web/package.json`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -605,10 +640,12 @@ Expected: FAIL — kan `../config.js` niet vinden.
 export const CONFIG = {
   model: "knmi_seamless",
   forecastDays: 4,
-  dataUrl: "../data/forecast.json",
+  dataUrl: "data/forecast.json", // relatief t.o.v. web/ (site-root)
   staleHours: 12,
   defaults: { margin: 2, minSupply: 16 },
   dewAxis: { min: 8, max: 20 }, // dauwpunt-schaal voor dag-ranges
+  // Vaste NL-bounding-box voor de kaartprojectie (omtrek + stippen delen deze).
+  nlBbox: { minLat: 50.7, maxLat: 53.6, minLon: 3.3, maxLon: 7.25 },
   // Klassegrens hoort bij de groenere zijde: classify gebruikt dewpoint <= upTo.
   levels: [
     { upTo: 14, key: "volop", label: "Volop koelen", colorVar: "--c-green" },
@@ -627,7 +664,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add web/config.js web/test/config.test.mjs
+git add web/package.json web/config.js web/test/config.test.mjs
 git commit -m "feat: add frontend config with tunable thresholds
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -890,7 +927,9 @@ export function groupByDay(hours, dewpoint) {
   });
   return [...map.entries()].map(([date, indices]) => {
     const vals = indices.map((i) => dewpoint[i]).filter((v) => v != null);
-    return { date, indices, min: Math.min(...vals), max: Math.max(...vals) };
+    const min = vals.length ? Math.min(...vals) : null;
+    const max = vals.length ? Math.max(...vals) : null;
+    return { date, indices, min, max };
   });
 }
 ```
@@ -1191,6 +1230,21 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 3
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 .sw { width: 13px; height: 13px; border-radius: 3px; display: inline-block; }
 svg { display: block; width: 100%; height: auto; }
+
+/* Component-classes — render-functies gebruiken deze voor structuur;
+   inline style alleen voor dynamische posities/breedtes/kleur. */
+.scale-ticks { display: flex; justify-content: space-between; margin: 0 0 4px 64px; font-size: 10.5px; color: var(--muted); }
+.dayrow { display: flex; align-items: center; margin: 7px 0; }
+.dayrow .lbl { width: 64px; font-size: 13px; font-weight: 600; }
+.track { position: relative; flex: 1; height: 16px; background: rgba(128,128,128,.10); border-radius: 8px; }
+.bar { position: absolute; height: 16px; border-radius: 8px; }
+.dot { position: absolute; top: -3px; transform: translateX(-50%); width: 22px; height: 22px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); color: #fff; font-size: 9.5px; display: flex; align-items: center; justify-content: center; font-weight: 700; }
+.chart { position: relative; height: 160px; margin-left: 30px; border-left: 1px solid rgba(128,128,128,.4); border-bottom: 1px solid rgba(128,128,128,.4); }
+.chart svg { position: absolute; inset: 0; height: 100%; }
+.maxbadge { position: absolute; transform: translate(-50%,-130%); color: #fff; font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
+.scrub { position: absolute; top: 0; bottom: 0; border-left: 2px solid var(--accent); }
+#nl-map circle { cursor: pointer; }
+
 @media (max-width: 420px) { main { padding: 10px; } }
 ```
 
@@ -1339,7 +1393,7 @@ Expected: FAIL — `../views.js` ontbreekt.
 
 - [ ] **Step 3: Write the implementation**
 
-Volledige module met pure helpers + DOM-render. Kleuren komen uit CSS-variabelen zodat ze één bron hebben.
+Volledige module met pure helpers + DOM-render. Kleuren komen uit CSS-variabelen zodat ze één bron hebben. **Gebruik de CSS-classes uit `style.css` (`.dayrow`, `.track`, `.bar`, `.dot`, `.scale-ticks`, `.chart`, `.maxbadge`, `.scrub`) voor de structuur**; zet inline `style=""` alleen op dynamische waarden (links/width/background-kleur, positie van bolletje/badge/scrub). De code hieronder volgt dat patroon.
 
 ```js
 // web/views.js
@@ -1442,15 +1496,18 @@ export function renderHourChart(el, { hours, dewpoint, selIndex }) {
 export function renderMap(el, { places, selIndex, hourIndex, geo }) {
   const W = 200;
   const H = 230;
-  const bbox = bboxOf(places);
-  const proj = makeProjection(bbox, W, H, 8);
+  // Vaste NL-bbox uit config: omtrek én stippen delen exact deze transformatie,
+  // zodat de landgrens nooit buiten beeld valt (ook bij Zeeland/Wadden/Limburg).
+  const proj = makeProjection(CONFIG.nlBbox, W, H, 8);
   const outline = geoToPaths(geo, proj);
   const dots = places
     .map((p, i) => {
       const { x, y } = proj(p);
-      const c = cssColor(classify(p.dewpoint[hourIndex]).colorVar);
+      const lvl = classify(p.dewpoint[hourIndex]);
+      const c = cssColor(lvl.colorVar);
       const sel = i === selIndex;
-      return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${sel ? 7 : 5}" fill="${c}" stroke="${sel ? "#222" : "#fff"}" stroke-width="${sel ? 2.5 : 1.5}" data-i="${i}"><title>${p.name}: dauwpunt ${p.dewpoint[hourIndex]}°</title></circle>`;
+      // Toetsenbord-toegankelijk: focusbaar, role=button, label (niet alleen kleur).
+      return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${sel ? 7 : 5}" fill="${c}" stroke="${sel ? "#222" : "#fff"}" stroke-width="${sel ? 2.5 : 1.5}" data-i="${i}" tabindex="0" role="button" aria-label="${p.name}: dauwpunt ${p.dewpoint[hourIndex]}°, ${lvl.label}"><title>${p.name}: dauwpunt ${p.dewpoint[hourIndex]}° — ${lvl.label}</title></circle>`;
     })
     .join("");
   el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Kaart van Nederland met dauwpunt per plaats">
@@ -1582,6 +1639,11 @@ function setupControls() {
     const c = e.target.closest("circle[data-i]");
     if (c) selectPlace(Number(c.dataset.i));
   });
+  $("nl-map").addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const c = e.target.closest("circle[data-i]");
+    if (c) { e.preventDefault(); selectPlace(Number(c.dataset.i)); }
+  });
 }
 
 function togglePlay() {
@@ -1632,7 +1694,7 @@ init();
 Als er nog geen echte `data/forecast.json` is (netwerk in CI/lokale omgeving), genereer een kleine fixture met een paar plaatsen en ~96 uur, zodat de UI te verifiëren is:
 
 Run: `python3 -m scripts.fetch_forecast || echo "geen netwerk — maak fixture handmatig"`
-(Indien geen netwerk: schrijf tijdelijk een `data/forecast.json` met 3–5 plaatsen en 24–96 synthetische uren in het juiste schema, alleen voor lokale verificatie.)
+(Indien geen netwerk: schrijf tijdelijk een `web/data/forecast.json` met 3–5 plaatsen en 24–96 synthetische uren in het juiste schema, alleen voor lokale verificatie.)
 
 - [ ] **Step 3: End-to-end verificatie in de browser (Playwright MCP)**
 
@@ -1685,7 +1747,7 @@ Run: `node --test web/test/*.test.mjs && python3 -m unittest discover -s tests`
 Expected: alles PASS.
 
 ```bash
-git add README.md main.py pyproject.toml
+git add -A README.md main.py pyproject.toml  # -A stage ook een eventuele verwijdering van main.py
 git commit -m "docs: document run/build/test workflow
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
