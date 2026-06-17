@@ -5,7 +5,7 @@ import { loadPrefs, savePrefs } from "./store.js";
 import { nearestHourIndex, wallClockMs, amsterdamNowLabel } from "./days.js";
 import { nearestPoint } from "./geo.js";
 import {
-  renderNow, renderDayRanges, renderHourChart, renderMap, renderLegend,
+  renderNow, renderDayRanges, renderHourChart, renderMapBase, paintMap, renderLegend,
 } from "./views.js";
 
 const $ = (id) => document.getElementById(id);
@@ -22,7 +22,7 @@ const els = {
 };
 
 const state = {
-  forecast: null, geo: null, places: [], selIndex: 0, hourIndex: 0,
+  forecast: null, geo: null, places: [], byCode: {}, selIndex: 0, hourIndex: 0,
   prefs: loadPrefs(), playing: null,
 };
 
@@ -37,7 +37,7 @@ function renderAll() {
   renderNow(els, { dew, margin: state.prefs.margin, minSupply: state.prefs.minSupply });
   renderDayRanges($("day-ranges"), { hours: state.forecast.hours, dewpoint: place.dewpoint, selIndex: state.hourIndex });
   renderHourChart($("hour-chart"), { hours: state.forecast.hours, dewpoint: place.dewpoint, selIndex: state.hourIndex });
-  renderMap($("nl-map"), { places: state.places, selIndex: state.selIndex, hourIndex: state.hourIndex, geo: state.geo });
+  paintMap($("nl-map"), { byCode: state.byCode, hourIndex: state.hourIndex, selCode: place.code });
 }
 
 function selectPlace(i) {
@@ -79,14 +79,17 @@ function setupControls() {
     s.value = state.prefs.minSupply = Number.isFinite(v) ? v : state.prefs.minSupply;
     savePrefs(state.prefs); renderAll();
   });
-  $("nl-map").addEventListener("click", (e) => {
-    const c = e.target.closest("circle[data-i]");
-    if (c) selectPlace(Number(c.dataset.i));
-  });
+  const pickFromMap = (target) => {
+    const path = target.closest("path[data-code]");
+    if (!path) return;
+    const i = state.places.findIndex((p) => p.code === path.dataset.code);
+    if (i >= 0) selectPlace(i);
+  };
+  $("nl-map").addEventListener("click", (e) => pickFromMap(e.target));
   $("nl-map").addEventListener("keydown", (e) => {
     if (e.key !== "Enter" && e.key !== " ") return;
-    const c = e.target.closest("circle[data-i]");
-    if (c) { e.preventDefault(); selectPlace(Number(c.dataset.i)); }
+    e.preventDefault();
+    pickFromMap(e.target);
   });
 }
 
@@ -117,12 +120,13 @@ async function init() {
   try {
     state.forecast = await loadForecast();
     validateForecast(state.forecast); // gooit bij corrupte/incomplete data
-    state.geo = await fetch("nl.geo.json").then((r) => r.json());
+    state.geo = await fetch("gemeenten.geo.json").then((r) => r.json());
   } catch (e) {
     showBanner("Kon de voorspelling niet laden of de data is ongeldig. Probeer later opnieuw.");
     return;
   }
   state.places = state.forecast.places;
+  state.byCode = Object.fromEntries(state.places.map((p) => [p.code, p]));
   if (isStale(state.forecast.generated_at, Date.now())) {
     showBanner(`Let op: data is van ${new Date(state.forecast.generated_at).toLocaleString("nl-NL")} en mogelijk verouderd.`);
   }
@@ -130,6 +134,7 @@ async function init() {
   const saved = state.prefs.placeName ? findPlaceIndex(state.prefs.placeName) : -1;
   state.selIndex = saved >= 0 ? saved : 0;
   renderLegend($("legend"));
+  renderMapBase($("nl-map"), state.geo); // vlakken één keer; paintMap kleurt ze
   setupControls();
   setHour(state.hourIndex);
 }

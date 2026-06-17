@@ -21,6 +21,7 @@ def build_forecast(generated_at, model, places, hourly_by_place):
         out_places.append({
             "name": place["name"],
             "prov": place["prov"],
+            "code": place.get("code"),
             "lat": place["lat"],
             "lon": place["lon"],
             "dewpoint": [None if v is None else _round1(v) for v in hourly["dew_point_2m"]],

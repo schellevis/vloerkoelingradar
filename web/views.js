@@ -117,46 +117,13 @@ export function renderHourChart(el, { hours, dewpoint, selIndex }) {
   </div>`;
 }
 
-export function renderMap(el, { places, selIndex, hourIndex, geo }) {
-  const W = 200;
-  const H = 230;
-  // Vaste NL-bbox uit config: omtrek én stippen delen exact deze transformatie,
-  // zodat de landgrens nooit buiten beeld valt (ook bij Zeeland/Wadden/Limburg).
-  const proj = makeProjection(CONFIG.nlBbox, W, H, 8);
-  const outline = geoToPaths(geo, proj);
-  const dots = places
-    .map((p, i) => {
-      const { x, y } = proj(p);
-      const lvl = classify(p.dewpoint[hourIndex]);
-      const c = cssColor(lvl.colorVar);
-      const sel = i === selIndex;
-      // Toetsenbord-toegankelijk: focusbaar, role=button, label (niet alleen kleur).
-      return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${sel ? 7 : 5}" fill="${c}" stroke="${
-        sel ? "#222" : "#fff"
-      }" stroke-width="${sel ? 2.5 : 1.5}" data-i="${i}" tabindex="0" role="button" aria-label="${
-        p.name
-      }: dauwpunt ${p.dewpoint[hourIndex]}°, ${lvl.label}"><title>${p.name}: dauwpunt ${
-        p.dewpoint[hourIndex]
-      }° — ${lvl.label}</title></circle>`;
-    })
-    .join("");
-  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Kaart van Nederland met dauwpunt per plaats">
-    <path d="${outline}" fill="rgba(120,140,160,.14)" stroke="rgba(120,140,160,.5)" stroke-width="1"/>
-    ${dots}
-  </svg>`;
-}
+const MAP_W = 200;
+const MAP_H = 230;
 
-function geoToPaths(geo, proj) {
-  // Ondersteunt FeatureCollection / Feature / (Multi)Polygon -> SVG path d.
-  const polys = [];
-  const pushGeom = (g) => {
-    if (!g) return;
-    if (g.type === "Polygon") polys.push(g.coordinates);
-    else if (g.type === "MultiPolygon") g.coordinates.forEach((c) => polys.push(c));
-  };
-  if (geo.type === "FeatureCollection") geo.features.forEach((f) => pushGeom(f.geometry));
-  else if (geo.type === "Feature") pushGeom(geo.geometry);
-  else pushGeom(geo);
+// SVG path-d voor één (Multi)Polygon-feature via de gedeelde projectie.
+function featurePath(geom, proj) {
+  const polys =
+    geom.type === "MultiPolygon" ? geom.coordinates : geom.type === "Polygon" ? [geom.coordinates] : [];
   return polys
     .map((rings) =>
       rings
@@ -174,4 +141,40 @@ function geoToPaths(geo, proj) {
         .join(" "),
     )
     .join(" ");
+}
+
+// Tekent de gemeentevlakken één keer (zonder kleur). paintMap kleurt ze daarna in.
+// Vlakken zijn focusbaar (toetsenbord) en gekoppeld aan de data via data-code.
+export function renderMapBase(el, geo) {
+  const proj = makeProjection(CONFIG.nlBbox, MAP_W, MAP_H, 8);
+  const features = geo.type === "FeatureCollection" ? geo.features : [geo];
+  const paths = features
+    .map((f) => {
+      const code = f.properties.statcode;
+      const name = f.properties.statnaam;
+      const d = featurePath(f.geometry, proj);
+      return `<path d="${d}" data-code="${code}" data-name="${name}" tabindex="0" role="button" fill="#e9e9e9" stroke="#fff" stroke-width="0.4"><title>${name}</title></path>`;
+    })
+    .join("");
+  el.innerHTML = `<svg viewBox="0 0 ${MAP_W} ${MAP_H}" role="img" aria-label="Kaart van Nederland: dauwpunt per gemeente">${paths}</svg>`;
+}
+
+// Werkt alleen de fill/selectie van de bestaande vlakken bij (soepel scrubben).
+export function paintMap(el, { byCode, hourIndex, selCode }) {
+  let selected = null;
+  el.querySelectorAll("path[data-code]").forEach((path) => {
+    const place = byCode[path.dataset.code];
+    if (!place) return;
+    const dew = place.dewpoint[hourIndex];
+    const lvl = classify(dew);
+    path.setAttribute("fill", cssColor(lvl.colorVar));
+    const sel = path.dataset.code === selCode;
+    path.setAttribute("stroke", sel ? "#111" : "#fff");
+    path.setAttribute("stroke-width", sel ? "1.6" : "0.4");
+    path.setAttribute("aria-label", `${place.name}: dauwpunt ${dew}°, ${lvl.label}`);
+    const title = path.querySelector("title");
+    if (title) title.textContent = `${place.name}: dauwpunt ${dew}° — ${lvl.label}`;
+    if (sel) selected = path;
+  });
+  if (selected) selected.parentNode.appendChild(selected); // gekozen gemeente naar voren
 }

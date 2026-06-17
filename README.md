@@ -39,8 +39,8 @@ kleur.
 
 ## De app
 
-Forecast-first: je kiest je plek (zoeken, **"Gebruik mijn locatie"**, of klik een
-stip op de kaart) en ziet meteen:
+Forecast-first: je kiest je gemeente (zoeken, **"Gebruik mijn locatie"**, of klik
+een gemeente op de kaart) en ziet meteen:
 
 - **Nu-oordeel** in twee lagen — de luchtvochtigheidssituatie (kleur + dauwpunt)
   en jouw aanvoeradvies.
@@ -48,15 +48,17 @@ stip op de kaart) en ziet meteen:
 - **Uurgrafiek** — de exacte dauwpuntvoorspelling, met per dag een gekleurde
   badge voor het hoogste dauwpunt.
 - **Tijdslider + afspeelknop** — scrub door de uren; grafiek én kaart bewegen mee.
-- **Landelijk kaartje** — een gekleurde stip per plaats (de "radar"-vibe).
+- **Choropleth-kaart** — alle Nederlandse gemeenten als gekleurde vlakken, elk op
+  het dauwpunt van die gemeente (de "radar"-vibe).
 
 ## Architectuur
 
 Volledig statisch, twee delen:
 
 1. **Data-job** (Python, GitHub Actions, elke 6 u): haalt uurlijkse temperatuur +
-   dauwpunt op voor 91 plaatsen uit het KNMI-model via Open-Meteo en schrijft één
-   compacte `web/data/forecast.json` (alleen ruwe waarden).
+   dauwpunt op voor **alle ~342 gemeenten** (centroïde per gemeente) uit het
+   KNMI-model via Open-Meteo en schrijft één compacte `web/data/forecast.json`
+   (alleen ruwe waarden).
 2. **Browser** (vanilla ES modules, geen build, geen libraries): leest alleen die
    JSON en rekent kleur/advies client-side. Geen live API, geen CORS, geen
    API-sleutel.
@@ -98,7 +100,8 @@ Alle "knoppen" staan op één plek:
   NL-bounding-box, model en aantal dagen.
 - **`web/style.css`** — design-tokens (kleuren, spacing, fonts) als
   CSS-variabelen.
-- **`scripts/places.py`** — de 91 forecast-punten.
+- **`scripts/build_places.py`** — genereert `scripts/places.json` (één punt per
+  gemeente, centroïde + provincie) uit de gemeente-/provinciegrenzen.
 
 ## Beperkingen & disclaimer
 

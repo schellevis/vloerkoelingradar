@@ -16,9 +16,9 @@ forecast voor je eigen plek) met een landelijk kaartje als "radar"-overzicht.
 ## Architectuur (twee delen, gekoppeld via één JSON)
 
 1. **Data-job** — Python (`scripts/`), draait in GitHub Actions elke 6 u. Haalt
-   uurlijkse temperatuur + dauwpunt op voor 91 NL-plaatsen uit Open-Meteo (model
-   `knmi_seamless`) en schrijft één compacte **`web/data/forecast.json`** met
-   alleen ruwe waarden.
+   uurlijkse temperatuur + dauwpunt op voor **alle ~342 gemeenten** (centroïde per
+   gemeente) uit Open-Meteo (model `knmi_seamless`) en schrijft één compacte
+   **`web/data/forecast.json`** met alleen ruwe waarden (incl. `code` = statcode).
 2. **Browser** — vanilla ES modules in `web/`, **geen build, geen frameworks,
    geen libraries**. Leest alleen die JSON en rekent kleur/advies client-side.
 
@@ -37,8 +37,11 @@ De browser raakt Open-Meteo nooit aan — alleen de Python-job doet dat.
 
 ```
 scripts/
-  places.py          # PLACES: 91 punten {name,prov,lat,lon}, alle 12 provincies
-  forecast_build.py  # build_forecast(...) + validate(...) (pure)
+  build_places.py    # leidt centroïde + provincie (point-in-polygon) per gemeente af
+  places.json        # gegenereerd: [{name,prov,code,lat,lon}] voor ~342 gemeenten
+  provincie.geo.json # build-data: provinciegrenzen (voor de PIP-toewijzing)
+  places.py          # laadt places.json -> PLACES
+  forecast_build.py  # build_forecast(...) + validate(...) (pure); neemt 'code' mee
   fetch_forecast.py  # fetch_all() batching/retry + run() schrijft veilig weg
   gen_search_list.py # genereert web/places-search.json uit PLACES
 web/
@@ -48,9 +51,11 @@ web/
   days.js     # wallClockMs, amsterdamNowLabel, nearestHourIndex, groupByDay
   data.js     # loadForecast (no-store + ?v=), isStale, validateForecast
   store.js    # loadPrefs/savePrefs (localStorage, geclampt op CONFIG.limits)
-  views.js    # dewToScale, bboxOf + render*: now/dayRanges/hourChart/map/legend
+  views.js    # dewToScale, bboxOf, render*: now/dayRanges/hourChart/legend +
+              #   renderMapBase (tekent gemeentevlakken 1x) + paintMap (kleurt/scrubt)
   app.js      # bootstrap + bedrading van alle interacties
-  index.html, style.css, places-search.json, nl.geo.json, package.json ({"type":"module"})
+  gemeenten.geo.json # 342 gemeentegrenzen (WGS84), bron voor de choropleth
+  index.html, style.css, places-search.json, package.json ({"type":"module"})
   test/*.test.mjs    # node:test unit-tests voor de pure modules
 tests/               # unittest voor de Python-modules
 .github/workflows/   # forecast.yml (cron+deploy), deploy-web.yml (push op web/**)
@@ -86,9 +91,14 @@ python3 -m unittest discover -s tests    # Python-tests
 - **Datapad**: de job schrijft `web/data/forecast.json`; de client laadt de
   relatieve URL `data/forecast.json`; Pages uploadt `path: web`. Eén consistent
   model, werkt lokaal én bij deploy.
-- **Kaartprojectie** gebruikt de vaste `CONFIG.nlBbox` (niet de bbox van de
-  punten), zodat omtrek én stippen dezelfde transformatie delen. `nl.geo.json` is
-  gefilterd tot het Europese vasteland (geen Caribisch NL).
+- **De kaart is een choropleth**: `renderMapBase` tekent de 342 gemeentevlakken
+  één keer (uit `gemeenten.geo.json`), `paintMap` update bij elke scrub alléén de
+  `fill` (en de selectie) — niet de hele SVG opnieuw, anders hapert de slider.
+  Forecast↔polygon matchen op `code` (statcode). Projectie via de vaste
+  `CONFIG.nlBbox`, zodat alle vlakken dezelfde transformatie delen.
+- **`scripts/places.json` is gegenereerd** door `build_places.py` (centroïde +
+  provincie via point-in-polygon). Bij een nieuwe gemeente-indeling: nieuwe
+  `gemeenten.geo.json`/`provincie.geo.json` plaatsen en het script herdraaien.
 - **Client vertrouwt de JSON niet blind**: `validateForecast()` gooit bij
   corrupte/incomplete data → `app.js` toont een banner i.p.v. te crashen.
 - **`forecast.json` is gecommit** als startdataset; de cron commit 'm bij wijziging
