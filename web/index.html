@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Vloerkoelingradar</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main>
+    <h1>Vloerkoelingradar</h1>
+    <div id="stale-banner" class="card" hidden></div>
+
+    <section class="card">
+      <div class="row">
+        <strong id="location-name">…</strong>
+        <span style="flex:1"></span>
+        <button id="geo-btn" aria-label="Gebruik mijn locatie">📍 mijn locatie</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <input id="search" list="place-list" placeholder="Zoek je plaats…" aria-label="Zoek je plaats" style="flex:1;padding:8px;border:1px solid var(--border);border-radius:8px" />
+        <datalist id="place-list"></datalist>
+      </div>
+    </section>
+
+    <section id="now-card" class="card">
+      <div class="muted">Luchtvochtigheidssituatie</div>
+      <div class="row" style="margin:6px 0">
+        <span id="now-verdict" class="verdict">…</span>
+        <span id="now-dewpoint" class="muted"></span>
+      </div>
+      <div class="muted">Jouw aanvoeradvies</div>
+      <div id="now-advice"></div>
+    </section>
+
+    <section class="card">
+      <div class="muted">Komende dagen — dauwpunt-range</div>
+      <div id="day-ranges"></div>
+    </section>
+
+    <section class="card">
+      <div class="muted">Exacte voorspelling — verwacht dauwpunt per uur</div>
+      <div id="hour-chart"></div>
+      <div class="row" style="margin-top:10px">
+        <button id="play-btn" aria-label="Speel de dagen af">▶</button>
+        <input id="timeline" type="range" min="0" max="0" value="0" step="1" style="flex:1" aria-label="Tijdstip" />
+      </div>
+      <div id="legend" class="legend" style="margin-top:8px"></div>
+    </section>
+
+    <section class="card">
+      <div class="muted">Nederland — op het gekozen tijdstip</div>
+      <div id="nl-map"></div>
+    </section>
+
+    <section id="settings" class="card">
+      <div class="muted">Instellingen</div>
+      <label class="row" style="margin-top:8px">Veiligheidsmarge (°C)
+        <input id="margin-input" type="number" step="0.5" min="0" max="6" style="width:80px" />
+      </label>
+      <label class="row" style="margin-top:8px">Min. aanvoertemperatuur (°C)
+        <input id="minsupply-input" type="number" step="0.5" min="10" max="22" style="width:80px" />
+      </label>
+    </section>
+
+    <section class="card muted">
+      <strong>Disclaimer.</strong> De koppeling buiten- → binnendauwpunt klopt het best bij
+      een geventileerde woning; een lokale dauwpunt-/condensatiebeveiliging op de installatie
+      blijft leidend. Voorspellingen zijn modelwaarden met onzekerheid — dit is een hulpmiddel,
+      geen vervanging voor de regeling van de installateur.
+    </section>
+  </main>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
