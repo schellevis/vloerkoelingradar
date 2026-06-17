@@ -1,0 +1,113 @@
+// web/app.js
+import { loadForecast, isStale } from "./data.js";
+import { loadPrefs, savePrefs } from "./store.js";
+import { nearestHourIndex } from "./days.js";
+import { nearestPoint } from "./geo.js";
+import {
+  renderNow, renderDayRanges, renderHourChart, renderMap, renderLegend,
+} from "./views.js";
+
+const $ = (id) => document.getElementById(id);
+const els = {
+  verdict: $("now-verdict"), dewpoint: $("now-dewpoint"), advice: $("now-advice"),
+};
+
+const state = {
+  forecast: null, geo: null, places: [], selIndex: 0, hourIndex: 0,
+  prefs: loadPrefs(), playing: null,
+};
+
+function findPlaceIndex(name) {
+  return state.places.findIndex((p) => p.name === name);
+}
+
+function renderAll() {
+  const place = state.places[state.selIndex];
+  const dew = place.dewpoint[state.hourIndex];
+  $("location-name").textContent = place.name;
+  renderNow(els, { dew, margin: state.prefs.margin, minSupply: state.prefs.minSupply });
+  renderDayRanges($("day-ranges"), { hours: state.forecast.hours, dewpoint: place.dewpoint, selIndex: state.hourIndex });
+  renderHourChart($("hour-chart"), { hours: state.forecast.hours, dewpoint: place.dewpoint, selIndex: state.hourIndex });
+  renderMap($("nl-map"), { places: state.places, selIndex: state.selIndex, hourIndex: state.hourIndex, geo: state.geo });
+}
+
+function selectPlace(i) {
+  if (i < 0) return;
+  state.selIndex = i;
+  state.prefs.placeName = state.places[i].name;
+  savePrefs(state.prefs);
+  renderAll();
+}
+
+function setHour(i) {
+  state.hourIndex = Math.max(0, Math.min(state.forecast.hours.length - 1, i));
+  $("timeline").value = String(state.hourIndex);
+  renderAll();
+}
+
+function setupControls() {
+  $("timeline").max = String(state.forecast.hours.length - 1);
+  $("timeline").addEventListener("input", (e) => setHour(Number(e.target.value)));
+  $("play-btn").addEventListener("click", togglePlay);
+  $("search").addEventListener("change", (e) => {
+    const i = findPlaceIndex(e.target.value);
+    if (i >= 0) selectPlace(i);
+  });
+  $("place-list").innerHTML = state.places.map((p) => `<option value="${p.name}">`).join("");
+  $("geo-btn").addEventListener("click", useGeolocation);
+  const m = $("margin-input"), s = $("minsupply-input");
+  m.value = state.prefs.margin; s.value = state.prefs.minSupply;
+  m.addEventListener("change", () => { state.prefs.margin = Number(m.value); savePrefs(state.prefs); renderAll(); });
+  s.addEventListener("change", () => { state.prefs.minSupply = Number(s.value); savePrefs(state.prefs); renderAll(); });
+  $("nl-map").addEventListener("click", (e) => {
+    const c = e.target.closest("circle[data-i]");
+    if (c) selectPlace(Number(c.dataset.i));
+  });
+  $("nl-map").addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const c = e.target.closest("circle[data-i]");
+    if (c) { e.preventDefault(); selectPlace(Number(c.dataset.i)); }
+  });
+}
+
+function togglePlay() {
+  if (state.playing) { clearInterval(state.playing); state.playing = null; $("play-btn").textContent = "▶"; return; }
+  $("play-btn").textContent = "⏸";
+  state.playing = setInterval(() => {
+    const next = (state.hourIndex + 1) % state.forecast.hours.length;
+    setHour(next);
+    if (next === 0) togglePlay();
+  }, 250);
+}
+
+function useGeolocation() {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition((pos) => {
+    const i = nearestPoint({ lat: pos.coords.latitude, lon: pos.coords.longitude }, state.places);
+    selectPlace(i);
+  });
+}
+
+async function init() {
+  try {
+    state.forecast = await loadForecast();
+    state.geo = await fetch("nl.geo.json").then((r) => r.json());
+  } catch (e) {
+    $("stale-banner").hidden = false;
+    $("stale-banner").textContent = "Kon de voorspelling niet laden. Probeer later opnieuw.";
+    return;
+  }
+  state.places = state.forecast.places;
+  if (isStale(state.forecast.generated_at, Date.now())) {
+    $("stale-banner").hidden = false;
+    $("stale-banner").textContent = `Let op: data is van ${new Date(state.forecast.generated_at).toLocaleString("nl-NL")} en mogelijk verouderd.`;
+  }
+  state.hourIndex = nearestHourIndex(state.forecast.hours, new Date());
+  const saved = state.prefs.placeName ? findPlaceIndex(state.prefs.placeName) : -1;
+  state.selIndex = saved >= 0 ? saved : 0;
+  renderLegend($("legend"));
+  setupControls();
+  setHour(state.hourIndex);
+}
+
+init();
