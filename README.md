@@ -1,134 +1,108 @@
 # Vloerkoelingradar
 
 Een buienradar, maar dan voor **vloerkoeling**. In plaats van regen voorspelt de
-radar of je de komende dag(en) **veilig kunt koelen**, op basis van de
-dauwpuntvoorspelling uit **KNMI open data**.
+radar of je de komende ~4 dagen **veilig kunt koelen**, op basis van de
+**dauwpunt**voorspelling uit het KNMI-model (via Open-Meteo).
 
-> Dit is de vastgestelde v1. Het volledige ontwerp staat in
-> `docs/superpowers/specs/2026-06-17-vloerkoelingradar-design.md`.
-
-## Het idee in één zin
-
-Zakt je aanvoerwater onder het **dauwpunt**, dan condenseert er vocht op de
-vloer (nat, glad, schimmelrisico). Door het buitendauwpunt te voorspellen weet je
-per uur of koelen kan en hoe koud het aanvoerwater mag zijn.
+Zakt je aanvoerwater onder het dauwpunt, dan condenseert er vocht op de vloer
+(nat, glad, schimmelrisico). Door het dauwpunt per uur te voorspellen weet je
+wanneer koelen kan — en hoe koud het aanvoerwater dan mag zijn.
 
 - 🟢 droge lucht (laag dauwpunt) → koel er flink op los
-- 🔴 vochtige lucht (hoog dauwpunt) → niet koelen, of aanvoer hoog houden
+- 🔴 vochtige lucht (hoog dauwpunt) → niet koelen, of de aanvoer hoog houden
 
-## 1. Het "brein"
+## Hoe het werkt
 
-Het **dauwpunt** is het hoofdgetal én de basis voor de kleur. Dat maakt het
-oordeel universeel: het hangt niet af van ieders binnentemperatuur, alleen van de
-voorspelling.
+Het **dauwpunt** is het hoofdgetal én de basis voor de kleur. Daardoor is het
+oordeel universeel — het hangt niet af van ieders binnentemperatuur, alleen van
+de voorspelling.
 
-- **Kleur/oordeel** op basis van het dauwpunt (vier niveaus):
+| Dauwpunt | Oordeel | Kleur |
+|---|---|---|
+| ≤ 14 °C | Volop koelen | 🟢 groen |
+| 14–16 °C | Gematigd | 🟡 geel |
+| 16–18 °C | Beperkt | 🟠 oranje |
+| ≥ 18 °C | Niet koelen | 🔴 rood |
 
-  | Dauwpunt | Oordeel | Kleur |
-  |---|---|---|
-  | ≤ 14 °C | Volop koelen | 🟢 |
-  | 14–16 °C | Gematigd | 🟡 |
-  | 16–18 °C | Beperkt | 🟠 |
-  | ≥ 18 °C | Niet koelen | 🔴 |
+Daarnaast toont de radar je **aanbevolen aanvoertemperatuur**:
 
-- **Aanbevolen aanvoertemperatuur** = `max(dauwpunt + marge, min-aanvoer)` — niet
-  kouder dan dat, anders condens. **Veiligheidsmarge** (default 2 °C) en
-  **minimale aanvoertemperatuur** (default 16 °C) zijn instelbaar en worden in
-  `localStorage` onthouden. Deze instellingen veranderen alléén het advies, niet
-  de kleur.
+```
+aanbevolen aanvoer = max(dauwpunt + veiligheidsmarge, minimale aanvoer)
+```
 
-> Condensatie is een *ondergrens* op de aanvoer: je mag niet kouder dan
-> `dauwpunt + marge`. De drempels staan als configuratie in `web/config.js`.
+Niet kouder dan dat, anders condens. De **veiligheidsmarge** (default 2 °C) en
+**minimale aanvoertemperatuur** (default 16 °C) zijn instelbaar en worden in je
+browser (`localStorage`) onthouden. Ze veranderen alléén het advies, niet de
+kleur.
 
-## 2. Databron
+> Condensatie is een *ondergrens*: je mag niet kóuder dan `dauwpunt + marge`.
 
-- **KNMI** via **Open-Meteo** (model `knmi_seamless`): uurlijkse voorspelling van
-  temperatuur en dauwpunt, ~4 dagen vooruit. JSON, geen API-sleutel.
+## De app
 
-## 3. Architectuur: statisch + voorberekend
+Forecast-first: je kiest je plek (zoeken, **"Gebruik mijn locatie"**, of klik een
+stip op de kaart) en ziet meteen:
 
-- Een **GitHub Actions-job** (elke 6 u) haalt de data op voor 91 plaatsen
-  verspreid over alle provincies en schrijft één compacte
-  `web/data/forecast.json` (ruwe dauwpunt-/temperatuurwaarden; kleur/oordeel
-  rekent de browser).
-- De **browser** leest alleen die voorberekende JSON. Geen live API of CORS
-  nodig: snel, gratis te hosten, robuust.
+- **Nu-oordeel** in twee lagen — de luchtvochtigheidssituatie (kleur + dauwpunt)
+  en jouw aanvoeradvies.
+- **Dag-ranges** — per dag een gekleurde balk van laagste → hoogste dauwpunt.
+- **Uurgrafiek** — de exacte dauwpuntvoorspelling, met per dag een gekleurde
+  badge voor het hoogste dauwpunt.
+- **Tijdslider + afspeelknop** — scrub door de uren; grafiek én kaart bewegen mee.
+- **Landelijk kaartje** — een gekleurde stip per plaats (de "radar"-vibe).
 
-## 4. "Waar woon je"
+## Architectuur
 
-- Zoeken in een meegeleverde plaatsenlijst, **"Gebruik mijn locatie"**
-  (browser-geolocatie), óf op de kaart een stip aanklikken → de radar kiest het
-  dichtstbijzijnde forecast-punt. Onthouden in `localStorage`. Geen
-  runtime-geocoding.
+Volledig statisch, twee delen:
 
-## 5. UI (forecast-first)
+1. **Data-job** (Python, GitHub Actions, elke 6 u): haalt uurlijkse temperatuur +
+   dauwpunt op voor 91 plaatsen uit het KNMI-model via Open-Meteo en schrijft één
+   compacte `web/data/forecast.json` (alleen ruwe waarden).
+2. **Browser** (vanilla ES modules, geen build, geen libraries): leest alleen die
+   JSON en rekent kleur/advies client-side. Geen live API, geen CORS, geen
+   API-sleutel.
 
-- **Nu-oordeel** in twee lagen: de *luchtvochtigheidssituatie* (gekleurd oordeel +
-  dauwpunt) en *jouw aanvoeradvies* ("houd je aanvoer boven X °C").
-- **Dag-ranges**: per dag een gekleurde balk van laagste → hoogste dauwpunt.
-- **Uurgrafiek** met de exacte dauwpuntvoorspelling op een neutrale achtergrond,
-  met per dag een gekleurde badge voor het hoogste dauwpunt.
-- **Tijdslider + afspeelknop** om door de uren te scrubben — grafiek én kaart
-  bewegen mee (de "radar"-animatie).
-- **Landelijk SVG-kaartje** met een gekleurde stip per plaats; jouw plek omrand.
+Het volledige ontwerp en de besluiten staan in
+[`docs/superpowers/specs/2026-06-17-vloerkoelingradar-design.md`](docs/superpowers/specs/2026-06-17-vloerkoelingradar-design.md).
 
-## 6. Deployment
+## Lokaal draaien
 
-- Volledig statisch: **GitHub Pages** via GitHub Actions (zie hieronder).
+```bash
+# 1. (optioneel) verse data ophalen — er staat al een dataset in de repo
+python3 -m scripts.fetch_forecast        # schrijft web/data/forecast.json
+
+# 2. site serveren (de site-root is web/)
+python3 -m http.server 8000 --directory web
+# open http://localhost:8000/
+```
+
+## Tests
+
+```bash
+node --test web/test/*.test.mjs          # frontend-logica (vanilla ESM)
+python3 -m unittest discover -s tests    # data-job (Python stdlib)
+```
+
+## Deployment (GitHub Pages)
+
+Eenmalig: in **Settings → Pages → Source = "GitHub Actions"**. Daarna:
+
+- `.github/workflows/forecast.yml` — cron (elke 6 u) + handmatig: haalt data op,
+  commit `forecast.json` als die wijzigt, en deployt naar Pages.
+- `.github/workflows/deploy-web.yml` — deployt bij wijzigingen in `web/**`.
+
+## Aanpassen
+
+Alle "knoppen" staan op één plek:
+
+- **`web/config.js`** — kleurdrempels, defaults, instellingsgrenzen, dauwpunt-as,
+  NL-bounding-box, model en aantal dagen.
+- **`web/style.css`** — design-tokens (kleuren, spacing, fonts) als
+  CSS-variabelen.
+- **`scripts/places.py`** — de 91 forecast-punten.
 
 ## Beperkingen & disclaimer
 
-- De koppeling buiten- → binnendauwpunt klopt het best bij een geventileerde
-  woning; een lokale dauwpunt-/condensatiebeveiliging op de installatie blijft
-  leidend.
-- Voorspellingen zijn modelwaarden met onzekerheid; dit is een hulpmiddel, geen
-  vervanging voor de regeling van de installateur.
-
-## Lokaal draaien & ontwikkelen
-
-### Data-job uitvoeren
-
-```bash
-python3 -m scripts.fetch_forecast
-```
-
-Dit haalt de KNMI-dauwpuntvoorspelling op via Open-Meteo en schrijft
-`web/data/forecast.json` met uurgegevens voor alle geconfigureerde plaatsen.
-
-### Website lokaal serveren
-
-```bash
-python3 -m http.server 8000 --directory web
-```
-
-Open vervolgens `http://localhost:8000/` in je browser. De site is volledig
-statisch — alle interactie gebeurt client-side, geen build nodig.
-
-### Tests uitvoeren
-
-**Frontend-logica** (vanilla JavaScript, ESM):
-```bash
-node --test web/test/*.test.mjs
-```
-
-**Data-job** (Python):
-```bash
-python3 -m unittest discover -s tests
-```
-
-**Alles samen:**
-```bash
-node --test web/test/*.test.mjs && python3 -m unittest discover -s tests
-```
-
-### Deployment
-
-De site wordt automatisch gedeployed op twee manieren:
-
-- **Data-update cron:** `.github/workflows/forecast.yml` draait elke 6 uur,
-  haalt de nieuwste gegevens op, en deployt de site naar GitHub Pages.
-- **Website-wijzigingen:** `.github/workflows/deploy-web.yml` deployt naar
-  GitHub Pages bij elke push op main als iets in `web/**` verandert.
-
-De site-root voor Pages is `web/` — alle assets en de `data/forecast.json`
-zijn daar beschikbaar.
+De koppeling buiten- → binnendauwpunt klopt het best bij een geventileerde
+woning; een lokale dauwpunt-/condensatiebeveiliging op de installatie blijft
+leidend. Voorspellingen zijn modelwaarden met onzekerheid — dit is een
+hulpmiddel, geen vervanging voor de regeling van de installateur.
