@@ -1,5 +1,6 @@
 // web/app.js
-import { loadForecast, isStale } from "./data.js";
+import { CONFIG } from "./config.js";
+import { loadForecast, isStale, validateForecast } from "./data.js";
 import { loadPrefs, savePrefs } from "./store.js";
 import { nearestHourIndex } from "./days.js";
 import { nearestPoint } from "./geo.js";
@@ -8,6 +9,14 @@ import {
 } from "./views.js";
 
 const $ = (id) => document.getElementById(id);
+
+function showBanner(msg) {
+  const b = $("stale-banner");
+  b.hidden = false;
+  b.textContent = msg;
+}
+
+const clampLimit = (v, { min, max }) => Math.min(max, Math.max(min, v));
 const els = {
   verdict: $("now-verdict"), dewpoint: $("now-dewpoint"), advice: $("now-advice"),
 };
@@ -56,9 +65,20 @@ function setupControls() {
   $("place-list").innerHTML = state.places.map((p) => `<option value="${p.name}">`).join("");
   $("geo-btn").addEventListener("click", useGeolocation);
   const m = $("margin-input"), s = $("minsupply-input");
+  // Input-grenzen uit CONFIG (zelfde bron als de store-validatie).
+  m.min = CONFIG.limits.margin.min; m.max = CONFIG.limits.margin.max; m.step = CONFIG.limits.margin.step;
+  s.min = CONFIG.limits.minSupply.min; s.max = CONFIG.limits.minSupply.max; s.step = CONFIG.limits.minSupply.step;
   m.value = state.prefs.margin; s.value = state.prefs.minSupply;
-  m.addEventListener("change", () => { state.prefs.margin = Number(m.value); savePrefs(state.prefs); renderAll(); });
-  s.addEventListener("change", () => { state.prefs.minSupply = Number(s.value); savePrefs(state.prefs); renderAll(); });
+  m.addEventListener("change", () => {
+    const v = clampLimit(Number(m.value), CONFIG.limits.margin);
+    m.value = state.prefs.margin = Number.isFinite(v) ? v : state.prefs.margin;
+    savePrefs(state.prefs); renderAll();
+  });
+  s.addEventListener("change", () => {
+    const v = clampLimit(Number(s.value), CONFIG.limits.minSupply);
+    s.value = state.prefs.minSupply = Number.isFinite(v) ? v : state.prefs.minSupply;
+    savePrefs(state.prefs); renderAll();
+  });
   $("nl-map").addEventListener("click", (e) => {
     const c = e.target.closest("circle[data-i]");
     if (c) selectPlace(Number(c.dataset.i));
@@ -81,26 +101,29 @@ function togglePlay() {
 }
 
 function useGeolocation() {
-  if (!navigator.geolocation) return;
-  navigator.geolocation.getCurrentPosition((pos) => {
-    const i = nearestPoint({ lat: pos.coords.latitude, lon: pos.coords.longitude }, state.places);
-    selectPlace(i);
-  });
+  const fail = () => showBanner("Locatie niet beschikbaar; zoek je plaats handmatig.");
+  if (!navigator.geolocation) { fail(); return; }
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const i = nearestPoint({ lat: pos.coords.latitude, lon: pos.coords.longitude }, state.places);
+      selectPlace(i);
+    },
+    fail,
+  );
 }
 
 async function init() {
   try {
     state.forecast = await loadForecast();
+    validateForecast(state.forecast); // gooit bij corrupte/incomplete data
     state.geo = await fetch("nl.geo.json").then((r) => r.json());
   } catch (e) {
-    $("stale-banner").hidden = false;
-    $("stale-banner").textContent = "Kon de voorspelling niet laden. Probeer later opnieuw.";
+    showBanner("Kon de voorspelling niet laden of de data is ongeldig. Probeer later opnieuw.");
     return;
   }
   state.places = state.forecast.places;
   if (isStale(state.forecast.generated_at, Date.now())) {
-    $("stale-banner").hidden = false;
-    $("stale-banner").textContent = `Let op: data is van ${new Date(state.forecast.generated_at).toLocaleString("nl-NL")} en mogelijk verouderd.`;
+    showBanner(`Let op: data is van ${new Date(state.forecast.generated_at).toLocaleString("nl-NL")} en mogelijk verouderd.`);
   }
   state.hourIndex = nearestHourIndex(state.forecast.hours, new Date());
   const saved = state.prefs.placeName ? findPlaceIndex(state.prefs.placeName) : -1;

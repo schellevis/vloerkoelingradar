@@ -29,3 +29,11 @@ test("corrupt json falls back to defaults", () => {
   s.setItem("vkr.prefs", "{not json");
   assert.deepEqual(loadPrefs(s), { placeName: null, margin: 2, minSupply: 16 });
 });
+
+test("out-of-range prefs are clamped to CONFIG limits", () => {
+  const s = memStorage();
+  s.setItem("vkr.prefs", JSON.stringify({ placeName: "Gouda", margin: -100, minSupply: 1000 }));
+  const p = loadPrefs(s);
+  assert.equal(p.margin, 0);       // CONFIG.limits.margin.max/min
+  assert.equal(p.minSupply, 22);   // CONFIG.limits.minSupply.max
+});

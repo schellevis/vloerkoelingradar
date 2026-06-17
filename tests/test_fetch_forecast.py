@@ -32,7 +32,8 @@ class TestFetch(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "forecast.json")
             run(path, fetch_json=fetch_json, now_iso="2026-06-17T14:00:00+02:00", places=PLACES)
-            data = json.load(open(path))
+            with open(path) as f:
+                data = json.load(f)
             self.assertEqual(len(data["places"]), 3)
             self.assertEqual(data["hours"], ["2026-06-17T00:00", "2026-06-17T01:00"])
 
@@ -46,7 +47,8 @@ class TestFetch(unittest.TestCase):
                 f.write('{"keep":true}')
             with self.assertRaises(ValueError):
                 run(path, fetch_json=bad, now_iso="t", places=PLACES)
-            self.assertEqual(json.load(open(path)), {"keep": True})  # ongewijzigd
+            with open(path) as f:
+                self.assertEqual(json.load(f), {"keep": True})  # ongewijzigd
 
 if __name__ == "__main__":
     unittest.main()

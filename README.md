@@ -1,74 +1,80 @@
-# Concept: Vloerkoelingradar
+# Vloerkoelingradar
 
 Een buienradar, maar dan voor **vloerkoeling**. In plaats van regen voorspelt de
 radar of je de komende dag(en) **veilig kunt koelen**, op basis van de
 dauwpuntvoorspelling uit **KNMI open data**.
 
+> Dit is de vastgestelde v1. Het volledige ontwerp staat in
+> `docs/superpowers/specs/2026-06-17-vloerkoelingradar-design.md`.
+
 ## Het idee in één zin
 
-Zakt het vloeroppervlak onder het **dauwpunt** van de binnenlucht, dan
-condenseert er vocht op de vloer (nat, glad, schimmelrisico). Door het
-buitendauwpunt te voorspellen weet je per uur of koelen kan, en hoe koud het
-aanvoerwater dan mag zijn.
+Zakt je aanvoerwater onder het **dauwpunt**, dan condenseert er vocht op de
+vloer (nat, glad, schimmelrisico). Door het buitendauwpunt te voorspellen weet je
+per uur of koelen kan en hoe koud het aanvoerwater mag zijn.
 
 - 🟢 droge lucht (laag dauwpunt) → koel er flink op los
 - 🔴 vochtige lucht (hoog dauwpunt) → niet koelen, of aanvoer hoog houden
 
-Het sleutelgetal:
+## 1. Het "brein"
 
-```
-koudst toegestane aanvoertemperatuur = dauwpunt + veiligheidsmarge
-```
+Het **dauwpunt** is het hoofdgetal én de basis voor de kleur. Dat maakt het
+oordeel universeel: het hangt niet af van ieders binnentemperatuur, alleen van de
+voorspelling.
 
-Hoe lager het dauwpunt, hoe kouder het water mag en hoe meer koelvermogen je
-hebt.
+- **Kleur/oordeel** op basis van het dauwpunt (vier niveaus):
 
-## 1. De natuurkunde (het "brein")
+  | Dauwpunt | Oordeel | Kleur |
+  |---|---|---|
+  | ≤ 14 °C | Volop koelen | 🟢 |
+  | 14–16 °C | Gematigd | 🟡 |
+  | 16–18 °C | Beperkt | 🟠 |
+  | ≥ 18 °C | Niet koelen | 🔴 |
 
-- Het buitendauwpunt benadert het binnendauwpunt bij een geventileerde woning:
-  dauwpunt blijft — anders dan temperatuur — vrijwel behouden bij ventileren en
-  bij koelen/verwarmen zonder ontvochtiging.
-- Koelkwaliteit volgt uit het beschikbare temperatuurverschil:
-  `ΔT = binnentemperatuur − (dauwpunt + marge)`.
-  Groot ΔT = uitstekend koelen; ΔT rond nul = niet koelen.
-- Vijf niveaus met kleurcodes (uitstekend → goed → matig → beperkt → niet).
-- Instelbaar door de gebruiker: veiligheidsmarge, binnentemperatuur,
-  praktijkondergrens van de aanvoer (~16 °C).
+- **Aanbevolen aanvoertemperatuur** = `max(dauwpunt + marge, min-aanvoer)` — niet
+  kouder dan dat, anders condens. **Veiligheidsmarge** (default 2 °C) en
+  **minimale aanvoertemperatuur** (default 16 °C) zijn instelbaar en worden in
+  `localStorage` onthouden. Deze instellingen veranderen alléén het advies, niet
+  de kleur.
 
-> **Terminologie:** voor koelen is condensatie een *ondergrens* op de
-> aanvoertemperatuur. De radar presenteert daarom de *koudst toegestane*
-> aanvoer — dat is de grenswaarde die bepaalt hoe hard je mag koelen.
+> Condensatie is een *ondergrens* op de aanvoer: je mag niet kouder dan
+> `dauwpunt + marge`. De drempels staan als configuratie in `web/config.js`.
 
 ## 2. Databron
 
-- **KNMI HARMONIE-AROME**: uurlijkse voorspelling van temperatuur en relatieve
-  vochtigheid (→ dauwpunt), ~4 dagen vooruit.
-- Praktisch te ontsluiten via het KNMI-model in **Open-Meteo** (JSON, geen
-  API-sleutel, geen zwaar GRIB-/NetCDF-gedoe).
+- **KNMI** via **Open-Meteo** (model `knmi_seamless`): uurlijkse voorspelling van
+  temperatuur en dauwpunt, ~4 dagen vooruit. JSON, geen API-sleutel.
 
 ## 3. Architectuur: statisch + voorberekend
 
-- Een **server-side job** (bijv. GitHub Actions, elke paar uur) haalt de data op
-  voor ~90 plaatsen verspreid over alle provincies en schrijft één compacte
-  `forecast.json`.
+- Een **GitHub Actions-job** (elke 6 u) haalt de data op voor 91 plaatsen
+  verspreid over alle provincies en schrijft één compacte
+  `web/data/forecast.json` (ruwe dauwpunt-/temperatuurwaarden; kleur/oordeel
+  rekent de browser).
 - De **browser** leest alleen die voorberekende JSON. Geen live API of CORS
   nodig: snel, gratis te hosten, robuust.
 
 ## 4. "Waar woon je"
 
-- Zoeken in een meegeleverde plaatsenlijst, óf op de kaart klikken → de radar
-  kiest het dichtstbijzijnde meetpunt. Geen runtime-geocoding nodig.
+- Zoeken in een meegeleverde plaatsenlijst, **"Gebruik mijn locatie"**
+  (browser-geolocatie), óf op de kaart een stip aanklikken → de radar kiest het
+  dichtstbijzijnde forecast-punt. Onthouden in `localStorage`. Geen
+  runtime-geocoding.
 
-## 5. UI (de "radar")
+## 5. UI (forecast-first)
 
-- Kaart van Nederland met per plaats een gekleurde stip, plus een
-  **tijdslider + afspeelknop** om door de komende dagen te scrubben (de animatie).
-- Detailpaneel voor de gekozen plaats: oordeel "nu", dauwpunt/temperatuur/RV,
-  een **uurgrafiek** met gekleurde koelzones, en een **dagoverzicht**.
+- **Nu-oordeel** in twee lagen: de *luchtvochtigheidssituatie* (gekleurd oordeel +
+  dauwpunt) en *jouw aanvoeradvies* ("houd je aanvoer boven X °C").
+- **Dag-ranges**: per dag een gekleurde balk van laagste → hoogste dauwpunt.
+- **Uurgrafiek** met de exacte dauwpuntvoorspelling op een neutrale achtergrond,
+  met per dag een gekleurde badge voor het hoogste dauwpunt.
+- **Tijdslider + afspeelknop** om door de uren te scrubben — grafiek én kaart
+  bewegen mee (de "radar"-animatie).
+- **Landelijk SVG-kaartje** met een gekleurde stip per plaats; jouw plek omrand.
 
 ## 6. Deployment
 
-- Volledig statisch: **GitHub Pages** (via de Action) of **Vercel**.
+- Volledig statisch: **GitHub Pages** via GitHub Actions (zie hieronder).
 
 ## Beperkingen & disclaimer
 
@@ -77,13 +83,6 @@ hebt.
   leidend.
 - Voorspellingen zijn modelwaarden met onzekerheid; dit is een hulpmiddel, geen
   vervanging voor de regeling van de installateur.
-
-## Open vragen / keuzes
-
-- Bevestiging van de term "maximale aanvoertemperatuur" → gepresenteerd als
-  "koudst toegestane aanvoer". Akkoord?
-- Verversingsfrequentie van de data (elke 6 u?) en aantal/spreiding plaatsen.
-- Wel/geen interpolatie tussen meetpunten voor een vloeiende heatmap.
 
 ## Lokaal draaien & ontwikkelen
 
