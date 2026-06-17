@@ -2,7 +2,7 @@
 import { CONFIG } from "./config.js";
 import { loadForecast, isStale, validateForecast } from "./data.js";
 import { loadPrefs, savePrefs } from "./store.js";
-import { nearestHourIndex } from "./days.js";
+import { nearestHourIndex, wallClockMs, amsterdamNowLabel } from "./days.js";
 import { nearestPoint } from "./geo.js";
 import {
   renderNow, renderDayRanges, renderHourChart, renderMap, renderLegend,
@@ -106,6 +106,7 @@ function useGeolocation() {
   navigator.geolocation.getCurrentPosition(
     (pos) => {
       const i = nearestPoint({ lat: pos.coords.latitude, lon: pos.coords.longitude }, state.places);
+      if (i < 0) { fail(); return; }
       selectPlace(i);
     },
     fail,
@@ -125,7 +126,7 @@ async function init() {
   if (isStale(state.forecast.generated_at, Date.now())) {
     showBanner(`Let op: data is van ${new Date(state.forecast.generated_at).toLocaleString("nl-NL")} en mogelijk verouderd.`);
   }
-  state.hourIndex = nearestHourIndex(state.forecast.hours, new Date());
+  state.hourIndex = nearestHourIndex(state.forecast.hours, wallClockMs(amsterdamNowLabel(new Date())));
   const saved = state.prefs.placeName ? findPlaceIndex(state.prefs.placeName) : -1;
   state.selIndex = saved >= 0 ? saved : 0;
   renderLegend($("legend"));

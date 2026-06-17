@@ -11,7 +11,8 @@ const cssColor = (varName) =>
 
 export function dewToScale(dew) {
   const { min, max } = CONFIG.dewAxis;
-  return Math.max(0, Math.min(1, (dew - min) / (max - min)));
+  const span = max - min || 1; // voorkom deling door nul bij config-misconfiguratie
+  return Math.max(0, Math.min(1, (dew - min) / span));
 }
 
 export function bboxOf(points) {
@@ -82,6 +83,10 @@ export function renderHourChart(el, { hours, dewpoint, selIndex }) {
   const n = hours.length;
   const vals = dewpoint.map((v) => (v == null ? null : v));
   const present = vals.filter((v) => v != null);
+  if (n < 2 || present.length === 0) {
+    el.innerHTML = `<p class="muted">Te weinig data om een grafiek te tonen.</p>`;
+    return;
+  }
   const lo = Math.min(...present) - 1;
   const hi = Math.max(...present) + 1;
   const X = (i) => (i / (n - 1)) * 100;
@@ -93,7 +98,10 @@ export function renderHourChart(el, { hours, dewpoint, selIndex }) {
   const days = groupByDay(hours, dewpoint);
   const badges = days
     .map((d) => {
-      const i = d.indices.reduce((a, b) => (dewpoint[b] > dewpoint[a] ? b : a), d.indices[0]);
+      // Kies het hoogste dauwpunt van de dag, null-waarden negerend.
+      const valid = d.indices.filter((i) => dewpoint[i] != null);
+      if (valid.length === 0) return "";
+      const i = valid.reduce((a, b) => (dewpoint[b] > dewpoint[a] ? b : a), valid[0]);
       const c = cssColor(classify(dewpoint[i]).colorVar);
       return `<span class="maxbadge" style="left:${X(i)}%;top:${Y(
         dewpoint[i],

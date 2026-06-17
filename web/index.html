@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Vloerkoelingradar</title>
+  <link rel="icon" href="data:," />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -55,11 +56,12 @@
 
     <section id="settings" class="card">
       <div class="muted">Instellingen</div>
+      <!-- min/max/step worden runtime gezet vanuit CONFIG.limits (één bron). -->
       <label class="row" style="margin-top:8px">Veiligheidsmarge (°C)
-        <input id="margin-input" type="number" step="0.5" min="0" max="6" style="width:80px" />
+        <input id="margin-input" type="number" style="width:80px" />
       </label>
       <label class="row" style="margin-top:8px">Min. aanvoertemperatuur (°C)
-        <input id="minsupply-input" type="number" step="0.5" min="10" max="22" style="width:80px" />
+        <input id="minsupply-input" type="number" style="width:80px" />
       </label>
     </section>
 
