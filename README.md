@@ -84,3 +84,52 @@ hebt.
   "koudst toegestane aanvoer". Akkoord?
 - Verversingsfrequentie van de data (elke 6 u?) en aantal/spreiding plaatsen.
 - Wel/geen interpolatie tussen meetpunten voor een vloeiende heatmap.
+
+## Lokaal draaien & ontwikkelen
+
+### Data-job uitvoeren
+
+```bash
+python3 -m scripts.fetch_forecast
+```
+
+Dit haalt de KNMI-dauwpuntvoorspelling op via Open-Meteo en schrijft
+`web/data/forecast.json` met uurgegevens voor alle geconfigureerde plaatsen.
+
+### Website lokaal serveren
+
+```bash
+python3 -m http.server 8000 --directory web
+```
+
+Open vervolgens `http://localhost:8000/` in je browser. De site is volledig
+statisch — alle interactie gebeurt client-side, geen build nodig.
+
+### Tests uitvoeren
+
+**Frontend-logica** (vanilla JavaScript, ESM):
+```bash
+node --test web/test/*.test.mjs
+```
+
+**Data-job** (Python):
+```bash
+python3 -m unittest discover -s tests
+```
+
+**Alles samen:**
+```bash
+node --test web/test/*.test.mjs && python3 -m unittest discover -s tests
+```
+
+### Deployment
+
+De site wordt automatisch gedeployed op twee manieren:
+
+- **Data-update cron:** `.github/workflows/forecast.yml` draait elke 6 uur,
+  haalt de nieuwste gegevens op, en deployt de site naar GitHub Pages.
+- **Website-wijzigingen:** `.github/workflows/deploy-web.yml` deployt naar
+  GitHub Pages bij elke push op main als iets in `web/**` verandert.
+
+De site-root voor Pages is `web/` — alle assets en de `data/forecast.json`
+zijn daar beschikbaar.
