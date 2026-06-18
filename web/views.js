@@ -7,6 +7,14 @@ import { groupByDay } from "./days.js";
 const cssColor = (varName) =>
   getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || "#888";
 
+// Korte weekdag-naam voor een kalenderdatum ("2026-06-18" -> "do"). T12:00 vermijdt
+// dat een dauwpunt-datum door de apparaat-zone op de vorige dag valt.
+const weekdayShort = (date) =>
+  new Date(date + "T12:00").toLocaleDateString("nl-NL", { weekday: "short" });
+
+// Label per dag: de eerste dag is altijd "vandaag", de rest de korte weekdag.
+const dayLabel = (date, i) => (i === 0 ? "vandaag" : weekdayShort(date));
+
 // --- Pure helpers (getest met node:test) -------------------------------------
 
 export function dewToScale(dew) {
@@ -44,7 +52,6 @@ export function renderNow(els, { dew, margin, minSupply }) {
 export function renderDayRanges(el, { hours, dewpoint, selIndex }) {
   const days = groupByDay(hours, dewpoint);
   const selDate = hours[selIndex].slice(0, 10);
-  const fmt = (d) => new Date(d + "T12:00").toLocaleDateString("nl-NL", { weekday: "short" });
   const mid = (CONFIG.dewAxis.min + CONFIG.dewAxis.max) / 2;
   const ticks =
     `<div class="scale-ticks">` +
@@ -56,7 +63,7 @@ export function renderDayRanges(el, { hours, dewpoint, selIndex }) {
       const right = dewToScale(d.max) * 100;
       const c1 = cssColor(classify(d.min).colorVar);
       const c2 = cssColor(classify(d.max).colorVar);
-      const label = i === 0 ? "vandaag" : fmt(d.date);
+      const label = dayLabel(d.date, i);
       const isSel = d.date === selDate;
       const selDew = isSel ? dewpoint[selIndex] : null;
       const dot =
@@ -108,13 +115,33 @@ export function renderHourChart(el, { hours, dewpoint, selIndex }) {
       )}%;background:${c}">${Math.round(dewpoint[i])}°</span>`;
     })
     .join("");
+  // Verticale scheidslijn aan het begin van elke dag (behalve de eerste), zodat
+  // zichtbaar is waar een dag ophoudt en de volgende begint.
+  const dividers = days
+    .slice(1)
+    .map((d) => `<div class="day-divider" style="left:${X(d.indices[0])}%"></div>`)
+    .join("");
+  // Dag-naam onder elke dag-kolom, links uitgelijnd op de scheidslijn.
+  const labels = days
+    .map((d, i) => {
+      const last = d.indices[d.indices.length - 1];
+      const left = X(d.indices[0]);
+      const width = X(last) - left;
+      return `<span class="day-label" style="left:${left}%;width:${width}%">${dayLabel(
+        d.date,
+        i,
+      )}</span>`;
+    })
+    .join("");
   el.innerHTML = `<div class="chart">
+    ${dividers}
     ${badges}
     <svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="Verwacht dauwpunt per uur over ${days.length} dagen">
       <polyline points="${pts}" fill="none" stroke="${cssColor("--chart-line")}" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
     </svg>
     <div class="scrub" style="left:${X(selIndex)}%"></div>
-  </div>`;
+  </div>
+  <div class="day-labels">${labels}</div>`;
 }
 
 const MAP_W = 200;
