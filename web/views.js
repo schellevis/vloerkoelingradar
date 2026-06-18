@@ -64,6 +64,9 @@ export function renderDayRanges(el, { hours, dewpoint, selIndex }) {
       const c1 = cssColor(classify(d.min).colorVar);
       const c2 = cssColor(classify(d.max).colorVar);
       const label = dayLabel(d.date, i);
+      // De eerste dag is "nu": een pulserende live-stip markeert dat visueel.
+      const isToday = i === 0;
+      const labelHtml = isToday ? `<span class="live" aria-hidden="true"></span>${label}` : label;
       const isSel = d.date === selDate;
       const selDew = isSel ? dewpoint[selIndex] : null;
       const dot =
@@ -72,13 +75,26 @@ export function renderDayRanges(el, { hours, dewpoint, selIndex }) {
           : `<div class="dot" style="left:${dewToScale(selDew) * 100}%;background:${cssColor(
               classify(selDew).colorVar,
             )}">${Math.round(selDew)}°</div>`;
-      return `<div class="dayrow">
-          <span class="lbl">${label}</span>
+      // Min/max-badges aan de uiteinden van de balk; alleen tonen als ze binnen
+      // de track passen ("als dat past"), anders vallen ze buiten de rand. Bij een
+      // platte dag (afgerond lo===hi) volstaat de min-badge.
+      const lo = d.min == null ? null : Math.round(d.min);
+      const hi = d.max == null ? null : Math.round(d.max);
+      const loBadge =
+        lo != null && left >= 7 ? `<span class="rangebadge lo" style="left:${left}%">${lo}°</span>` : "";
+      const hiBadge =
+        hi != null && hi !== lo && right <= 93
+          ? `<span class="rangebadge hi" style="left:${right}%">${hi}°</span>`
+          : "";
+      return `<div class="dayrow${isToday ? " is-today" : ""}">
+          <span class="lbl">${labelHtml}</span>
           <div class="track">
             <div class="bar" style="left:${left}%;width:${Math.max(
               2,
               right - left,
             )}%;background:linear-gradient(90deg,${c1},${c2})"></div>
+            ${loBadge}
+            ${hiBadge}
             ${dot}
           </div></div>`;
     })
