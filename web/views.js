@@ -111,7 +111,7 @@ export function renderHourChart(el, { hours, dewpoint, selIndex }) {
   el.innerHTML = `<div class="chart">
     ${badges}
     <svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="Verwacht dauwpunt per uur over ${days.length} dagen">
-      <polyline points="${pts}" fill="none" stroke="#222" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
+      <polyline points="${pts}" fill="none" stroke="${cssColor("--chart-line")}" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
     </svg>
     <div class="scrub" style="left:${X(selIndex)}%"></div>
   </div>`;
@@ -148,12 +148,14 @@ function featurePath(geom, proj) {
 export function renderMapBase(el, geo) {
   const proj = makeProjection(CONFIG.nlBbox, MAP_W, MAP_H, 8);
   const features = geo.type === "FeatureCollection" ? geo.features : [geo];
+  const emptyFill = cssColor("--map-empty");
+  const stroke = cssColor("--map-stroke");
   const paths = features
     .map((f) => {
       const code = f.properties.statcode;
       const name = f.properties.statnaam;
       const d = featurePath(f.geometry, proj);
-      return `<path d="${d}" data-code="${code}" data-name="${name}" tabindex="0" role="button" fill="#e9e9e9" stroke="#fff" stroke-width="0.4"><title>${name}</title></path>`;
+      return `<path d="${d}" data-code="${code}" data-name="${name}" tabindex="0" role="button" fill="${emptyFill}" stroke="${stroke}" stroke-width="0.4"><title>${name}</title></path>`;
     })
     .join("");
   el.innerHTML = `<svg viewBox="0 0 ${MAP_W} ${MAP_H}" role="img" aria-label="Kaart van Nederland: dauwpunt per gemeente">${paths}</svg>`;
@@ -162,6 +164,8 @@ export function renderMapBase(el, geo) {
 // Werkt alleen de fill/selectie van de bestaande vlakken bij (soepel scrubben).
 export function paintMap(el, { byCode, hourIndex, selCode }) {
   let selected = null;
+  const stroke = cssColor("--map-stroke");
+  const selectedStroke = cssColor("--map-selected-stroke");
   el.querySelectorAll("path[data-code]").forEach((path) => {
     const place = byCode[path.dataset.code];
     if (!place) return;
@@ -169,7 +173,7 @@ export function paintMap(el, { byCode, hourIndex, selCode }) {
     const lvl = classify(dew);
     path.setAttribute("fill", cssColor(lvl.colorVar));
     const sel = path.dataset.code === selCode;
-    path.setAttribute("stroke", sel ? "#111" : "#fff");
+    path.setAttribute("stroke", sel ? selectedStroke : stroke);
     path.setAttribute("stroke-width", sel ? "1.6" : "0.4");
     path.setAttribute("aria-label", `${place.name}: dauwpunt ${dew}°, ${lvl.label}`);
     const title = path.querySelector("title");
