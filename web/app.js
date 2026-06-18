@@ -2,7 +2,7 @@
 import { CONFIG } from "./config.js";
 import { loadForecast, isStale, validateForecast } from "./data.js";
 import { loadPrefs, savePrefs } from "./store.js";
-import { nearestHourIndex, wallClockMs, amsterdamNowLabel } from "./days.js";
+import { nearestHourIndex, wallClockMs, amsterdamNowLabel, endIndexForDays } from "./days.js";
 import { nearestPoint } from "./geo.js";
 import {
   renderNow, renderDayRanges, renderHourChart, renderMapBase, paintMap, renderLegend,
@@ -23,6 +23,7 @@ const els = {
 
 const state = {
   forecast: null, geo: null, places: [], byCode: {}, selIndex: 0, hourIndex: 0,
+  endHour: 0,
   prefs: loadPrefs(), playing: null,
 };
 
@@ -33,10 +34,13 @@ function findPlaceIndex(name) {
 function renderAll() {
   const place = state.places[state.selIndex];
   const dew = place.dewpoint[state.hourIndex];
+  const end = state.endHour + 1;
+  const hours = state.forecast.hours.slice(0, end);
+  const dewpoint = place.dewpoint.slice(0, end);
   $("location-name").textContent = place.name;
   renderNow(els, { dew, margin: state.prefs.margin, minSupply: state.prefs.minSupply });
-  renderDayRanges($("day-ranges"), { hours: state.forecast.hours, dewpoint: place.dewpoint, selIndex: state.hourIndex });
-  renderHourChart($("hour-chart"), { hours: state.forecast.hours, dewpoint: place.dewpoint, selIndex: state.hourIndex });
+  renderDayRanges($("day-ranges"), { hours, dewpoint, selIndex: state.hourIndex });
+  renderHourChart($("hour-chart"), { hours, dewpoint, selIndex: state.hourIndex });
   paintMap($("nl-map"), { byCode: state.byCode, hourIndex: state.hourIndex, selCode: place.code });
 }
 
@@ -49,14 +53,33 @@ function selectPlace(i) {
 }
 
 function setHour(i) {
-  state.hourIndex = Math.max(0, Math.min(state.forecast.hours.length - 1, i));
+  state.hourIndex = Math.max(0, Math.min(state.endHour, i));
   $("timeline").value = String(state.hourIndex);
   renderAll();
 }
 
+function updateDayToggle() {
+  document.querySelectorAll("#day-toggle [data-days]").forEach((btn) => {
+    btn.setAttribute("aria-pressed", String(Number(btn.dataset.days) === state.prefs.viewDays));
+  });
+}
+
+function setViewDays(n) {
+  state.prefs.viewDays = n;
+  state.endHour = endIndexForDays(state.forecast.hours, n);
+  savePrefs(state.prefs);
+  $("timeline").max = String(state.endHour);
+  setHour(Math.min(state.hourIndex, state.endHour));
+  updateDayToggle();
+}
+
 function setupControls() {
-  $("timeline").max = String(state.forecast.hours.length - 1);
+  $("timeline").max = String(state.endHour);
   $("timeline").addEventListener("input", (e) => setHour(Number(e.target.value)));
+  document.querySelectorAll("#day-toggle [data-days]").forEach((btn) => {
+    btn.addEventListener("click", () => setViewDays(Number(btn.dataset.days)));
+  });
+  updateDayToggle();
   $("play-btn").addEventListener("click", togglePlay);
   $("search").addEventListener("change", (e) => {
     const i = findPlaceIndex(e.target.value);
@@ -97,7 +120,7 @@ function togglePlay() {
   if (state.playing) { clearInterval(state.playing); state.playing = null; $("play-btn").textContent = "▶"; return; }
   $("play-btn").textContent = "⏸";
   state.playing = setInterval(() => {
-    const next = (state.hourIndex + 1) % state.forecast.hours.length;
+    const next = (state.hourIndex + 1) % (state.endHour + 1);
     setHour(next);
     if (next === 0) togglePlay();
   }, 250);
@@ -130,6 +153,7 @@ async function init() {
   if (isStale(state.forecast.generated_at, Date.now())) {
     showBanner(`Let op: data is van ${new Date(state.forecast.generated_at).toLocaleString("nl-NL")} en mogelijk verouderd.`);
   }
+  state.endHour = endIndexForDays(state.forecast.hours, state.prefs.viewDays);
   state.hourIndex = nearestHourIndex(state.forecast.hours, wallClockMs(amsterdamNowLabel(new Date())));
   const saved = state.prefs.placeName ? findPlaceIndex(state.prefs.placeName) : -1;
   state.selIndex = saved >= 0 ? saved : 0;

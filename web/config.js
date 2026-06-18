@@ -1,7 +1,9 @@
 // web/config.js
 export const CONFIG = {
   model: "knmi_seamless",
-  forecastDays: 4,
+  forecastDays: 14,
+  forecastDayOptions: [4, 7, 14],
+  forecastDayDefault: 4,
   dataUrl: "data/forecast.json", // relatief t.o.v. web/ (site-root)
   staleHours: 12,
   defaults: { margin: 2, minSupply: 16 },

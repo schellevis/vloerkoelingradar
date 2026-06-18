@@ -35,7 +35,14 @@
     </section>
 
     <section class="card">
-      <div class="muted">Komende dagen — dauwpunt-range</div>
+      <div class="row" style="margin-bottom:8px">
+        <span class="muted" style="flex:1">Komende dagen — dauwpunt-range</span>
+        <div id="day-toggle" class="day-toggle" role="group" aria-label="Aantal dagen weergeven">
+          <button data-days="4">4d</button>
+          <button data-days="7">7d</button>
+          <button data-days="14">14d</button>
+        </div>
+      </div>
       <div id="day-ranges"></div>
     </section>
 
