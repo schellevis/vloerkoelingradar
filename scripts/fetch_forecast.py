@@ -19,7 +19,7 @@ def _chunks(seq, size):
         yield seq[i:i + size]
 
 
-def http_fetch_json(lats, lons, *, model="knmi_seamless", forecast_days=4):
+def http_fetch_json(lats, lons, *, model="knmi_seamless", forecast_days=14):
     """Eén Open-Meteo-call voor een batch locaties -> lijst hourly-dicts."""
     params = {
         "latitude": ",".join(str(x) for x in lats),

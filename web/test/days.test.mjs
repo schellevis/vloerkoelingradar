@@ -1,7 +1,7 @@
 // web/test/days.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
-import { nearestHourIndex, groupByDay, wallClockMs, amsterdamNowLabel } from "../days.js";
+import { nearestHourIndex, groupByDay, wallClockMs, amsterdamNowLabel, endIndexForDays } from "../days.js";
 
 const HOURS = ["2026-06-17T00:00", "2026-06-17T13:00", "2026-06-17T14:00", "2026-06-18T00:00"];
 const DEW = [12, 17, 16, 11];
@@ -22,6 +22,12 @@ test("nearestHourIndex is independent of device timezone for a fixed instant", (
   // Een vast UTC-moment levert hetzelfde gekozen uur, ongeacht apparaat-zone.
   const ms = wallClockMs(amsterdamNowLabel(new Date("2026-06-17T11:55:00Z"))); // 13:55 Adam
   assert.equal(nearestHourIndex(HOURS, ms), 2); // 14:00
+});
+
+test("endIndexForDays returns last index of Nth calendar day", () => {
+  assert.equal(endIndexForDays(HOURS, 1), 2); // dag 17 juni: indices 0,1,2 -> laatste is 2
+  assert.equal(endIndexForDays(HOURS, 2), 3); // dag 18 juni: index 3
+  assert.equal(endIndexForDays(HOURS, 99), 3); // meer dagen dan data: geeft laatste index
 });
 
 test("groupByDay splits on calendar day with min/max", () => {

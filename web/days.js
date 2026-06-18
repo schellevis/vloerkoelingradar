@@ -38,6 +38,14 @@ export function nearestHourIndex(hours, nowMs) {
   return best;
 }
 
+// Geeft de index terug van het laatste uur in de N-de kalenderdag (0-gebaseerd).
+export function endIndexForDays(hours, n) {
+  const lastByDate = new Map();
+  hours.forEach((h, i) => lastByDate.set(h.slice(0, 10), i));
+  const dates = [...lastByDate.keys()].slice(0, n);
+  return dates.length ? lastByDate.get(dates[dates.length - 1]) : hours.length - 1;
+}
+
 export function groupByDay(hours, dewpoint) {
   const map = new Map();
   hours.forEach((h, i) => {

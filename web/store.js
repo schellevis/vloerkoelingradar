@@ -10,7 +10,12 @@ function clamp(value, { min, max }, def) {
 }
 
 export function loadPrefs(storage = globalThis.localStorage) {
-  const def = { placeName: null, margin: CONFIG.defaults.margin, minSupply: CONFIG.defaults.minSupply };
+  const def = {
+    placeName: null,
+    margin: CONFIG.defaults.margin,
+    minSupply: CONFIG.defaults.minSupply,
+    viewDays: CONFIG.forecastDayDefault,
+  };
   try {
     const raw = storage.getItem(KEY);
     if (!raw) return def;
@@ -19,6 +24,7 @@ export function loadPrefs(storage = globalThis.localStorage) {
       placeName: typeof p.placeName === "string" ? p.placeName : null,
       margin: clamp(p.margin, CONFIG.limits.margin, def.margin),
       minSupply: clamp(p.minSupply, CONFIG.limits.minSupply, def.minSupply),
+      viewDays: CONFIG.forecastDayOptions.includes(p.viewDays) ? p.viewDays : def.viewDays,
     };
   } catch {
     return def;
