@@ -3,10 +3,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { dewToScale, bboxOf } from "../views.js";
 
-test("dewToScale clamps to 0..1 over dewAxis 8..20", () => {
+test("dewToScale clamps to 0..1 over dewAxis 8..22", () => {
   assert.equal(dewToScale(8), 0);
-  assert.equal(dewToScale(20), 1);
-  assert.equal(dewToScale(14), 0.5);
+  assert.equal(dewToScale(22), 1);
+  assert.equal(dewToScale(15), 0.5);
   assert.equal(dewToScale(4), 0);
   assert.equal(dewToScale(30), 1);
 });

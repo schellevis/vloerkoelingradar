@@ -4,13 +4,13 @@ import assert from "node:assert/strict";
 import { classify, recommendedSupply } from "../model.js";
 
 test("classify boundaries belong to greener side", () => {
-  assert.equal(classify(13.9).key, "volop");
-  assert.equal(classify(14.0).key, "volop");   // grens -> groener
-  assert.equal(classify(14.1).key, "gematigd");
-  assert.equal(classify(16.0).key, "gematigd");
-  assert.equal(classify(16.1).key, "beperkt");
-  assert.equal(classify(18.0).key, "beperkt");
-  assert.equal(classify(18.1).key, "niet");
+  assert.equal(classify(15.9).key, "volop");
+  assert.equal(classify(16.0).key, "volop");   // grens -> groener
+  assert.equal(classify(16.1).key, "gematigd");
+  assert.equal(classify(18.0).key, "gematigd");
+  assert.equal(classify(18.1).key, "beperkt");
+  assert.equal(classify(21.0).key, "beperkt");
+  assert.equal(classify(21.1).key, "niet");
   assert.equal(classify(25).key, "niet");
 });
 

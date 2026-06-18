@@ -28,7 +28,7 @@ De browser raakt Open-Meteo nooit aan — alleen de Python-job doet dat.
 
 - **Kleur/oordeel = functie van het dauwpunt** (universeel, hangt niet af van
   instellingen). Drempels in `web/config.js`, grens hoort bij de groenere zijde
-  (`dewpoint <= upTo`): ≤14 groen · 14–16 geel · 16–18 oranje · ≥18 rood.
+  (`dewpoint <= upTo`): ≤16 groen · 16–18 geel · 18–21 oranje · >21 rood.
 - **Aanbevolen aanvoer = `max(dauwpunt + marge, minSupply)`**. Marge (default 2)
   en minSupply (default 16) zijn instelbaar (localStorage) en veranderen **alleen
   het advies, niet de kleur**.
