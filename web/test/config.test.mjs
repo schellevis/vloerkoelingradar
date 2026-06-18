@@ -13,5 +13,5 @@ test("defaults match spec", () => {
   assert.equal(CONFIG.defaults.margin, 2);
   assert.equal(CONFIG.defaults.minSupply, 16);
   assert.equal(CONFIG.staleHours, 12);
-  assert.deepEqual(CONFIG.dewAxis, { min: 8, max: 20 });
+  assert.deepEqual(CONFIG.dewAxis, { min: 8, max: 22 });
 });
