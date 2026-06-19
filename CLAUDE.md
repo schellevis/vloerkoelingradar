@@ -43,6 +43,7 @@ scripts/
   places.py          # laadt places.json -> PLACES
   forecast_build.py  # build_forecast(...) + validate(...) (pure); neemt 'code' mee
   fetch_forecast.py  # fetch_all() batching/retry + run() schrijft veilig weg
+  summary.py         # optionele landelijke dauwpunt-indruk via GitHub Models (stdlib urllib)
   gen_search_list.py # genereert web/places-search.json uit PLACES
 web/
   config.js   # ALLE tunables: levels/drempels, defaults, limits, dewAxis, nlBbox, model
@@ -104,6 +105,12 @@ python3 -m unittest discover -s tests    # Python-tests
 - **`forecast.json` is gecommit** als startdataset; de cron commit 'm bij wijziging
   (met `[skip ci]`; de workflow heeft géén push-trigger op data om self-trigger te
   vermijden).
+- **De landelijke indruk (`summary`) is optioneel.** De data-job vult 'm alleen als
+  er een token is (Actions `GITHUB_TOKEN` + `models: read`); faalt de LLM-call dan
+  geeft `generate_summary` `None` en schrijven we forecast.json zonder veld. De
+  client toont 'm via `renderSummary` (met `textContent`, niet `innerHTML`: modeltekst
+  is minder vertrouwd dan de KNMI-cijfers) en `validateForecast` vereist 'm niet.
+  Het model duidt alleen; kleur/advies blijven deterministisch uit het dauwpunt.
 - `innerHTML` in `views.js` is bewust: data is trusted (eigen plaatslijst + KNMI),
   en een sanitizer is uitgesloten door de geen-libraries-constraint.
 

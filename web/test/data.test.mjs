@@ -25,6 +25,13 @@ test("validateForecast rejects malformed data", () => {
     validateForecast({ ...VALID, places: [{ name: "X", dewpoint: [12, null], temp: [16, 15] }] }));
 });
 
+test("validateForecast accepts optional summary, rejects non-string", () => {
+  assert.equal(validateForecast({ ...VALID, summary: "Landelijke indruk." }).summary,
+    "Landelijke indruk.");
+  assert.equal(validateForecast(VALID), VALID); // summary mag ontbreken
+  assert.throws(() => validateForecast({ ...VALID, summary: 42 }));
+});
+
 test("isStale true beyond staleHours", () => {
   const gen = "2026-06-17T00:00:00+02:00";
   const now = Date.parse("2026-06-17T11:00:00+02:00");

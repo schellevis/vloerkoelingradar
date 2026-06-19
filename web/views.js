@@ -23,6 +23,12 @@ export function dewToScale(dew) {
   return Math.max(0, Math.min(1, (dew - min) / span));
 }
 
+// Splitst de modeltekst in alinea's op lege regels (pure helper, getest).
+export function summaryParagraphs(text) {
+  if (typeof text !== "string") return [];
+  return text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+}
+
 export function bboxOf(points) {
   return {
     minLat: Math.min(...points.map((p) => p.lat)),
@@ -38,6 +44,23 @@ export function renderLegend(el) {
   el.innerHTML = CONFIG.levels
     .map((l) => `<span><i class="sw" style="background:var(${l.colorVar})"></i>${l.label}</span>`)
     .join("");
+}
+
+// Toont de optionele landelijke indruk; verbergt de kaart als er geen tekst is.
+// textContent i.p.v. innerHTML: modeltekst is minder vertrouwd dan de KNMI-cijfers.
+export function renderSummary(card, bodyEl, summary) {
+  const paras = summaryParagraphs(summary);
+  bodyEl.textContent = "";
+  if (paras.length === 0) {
+    card.hidden = true;
+    return;
+  }
+  for (const para of paras) {
+    const p = document.createElement("p");
+    p.textContent = para;
+    bodyEl.appendChild(p);
+  }
+  card.hidden = false;
 }
 
 export function renderNow(els, { dew, margin, minSupply }) {

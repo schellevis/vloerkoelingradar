@@ -8,6 +8,7 @@ permissions:
   contents: write
   pages: write
   id-token: write
+  models: read   # GitHub Models: landelijke dauwpunt-indruk in de data-job
 concurrency:
   group: pages
   cancel-in-progress: false
@@ -23,6 +24,8 @@ jobs:
           python-version: "3.12"
       - name: Fetch forecast
         run: python -m scripts.fetch_forecast
+        env:
+          GITHUB_TOKEN: ${{ github.token }}   # voor de GitHub Models-call
       - name: Commit forecast if changed
         run: |
           if ! git diff --quiet -- web/data/forecast.json; then
