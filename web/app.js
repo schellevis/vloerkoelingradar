@@ -6,6 +6,7 @@ import { nearestHourIndex, wallClockMs, amsterdamNowLabel, endIndexForDays } fro
 import { nearestPoint } from "./geo.js";
 import {
   renderNow, renderDayRanges, renderHourChart, renderMapBase, paintMap, renderLegend,
+  renderSummary,
 } from "./views.js";
 
 const $ = (id) => document.getElementById(id);
@@ -158,6 +159,7 @@ async function init() {
   const saved = state.prefs.placeName ? findPlaceIndex(state.prefs.placeName) : -1;
   state.selIndex = saved >= 0 ? saved : 0;
   renderLegend($("legend"));
+  renderSummary($("impression-card"), $("impression"), state.forecast.summary);
   renderMapBase($("nl-map"), state.geo); // vlakken één keer; paintMap kleurt ze
   setupControls();
   setHour(state.hourIndex);

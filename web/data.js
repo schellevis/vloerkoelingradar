@@ -26,6 +26,9 @@ export function validateForecast(data) {
   if (Number.isNaN(Date.parse(data.generated_at))) {
     throw new Error("forecast: generated_at onparsebaar");
   }
+  if (data.summary != null && typeof data.summary !== "string") {
+    throw new Error("forecast: summary moet tekst zijn");
+  }
   const n = data.hours.length;
   for (const p of data.places) {
     for (const key of ["dewpoint", "temp"]) {
