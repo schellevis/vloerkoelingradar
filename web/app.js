@@ -142,9 +142,15 @@ function useGeolocation() {
 
 async function init() {
   try {
-    state.forecast = await loadForecast();
+    // Onafhankelijke fetches parallel: de geo-kaart hoeft niet op de forecast te
+    // wachten, dat scheelt een netwerk-round-trip bij de eerste render.
+    const [forecast, geo] = await Promise.all([
+      loadForecast(),
+      fetch("gemeenten.geo.json").then((r) => r.json()),
+    ]);
+    state.forecast = forecast;
+    state.geo = geo;
     validateForecast(state.forecast); // gooit bij corrupte/incomplete data
-    state.geo = await fetch("gemeenten.geo.json").then((r) => r.json());
   } catch (e) {
     showBanner("Kon de voorspelling niet laden of de data is ongeldig. Probeer later opnieuw.");
     return;

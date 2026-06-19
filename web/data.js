@@ -7,8 +7,12 @@ export function isStale(generatedAt, nowMs, staleHours = CONFIG.staleHours) {
 }
 
 export async function loadForecast(fetchFn = globalThis.fetch) {
-  const url = `${CONFIG.dataUrl}?v=${Date.now()}`;
-  const res = await fetchFn(url, { cache: "no-store" });
+  // "no-cache" i.p.v. "no-store" + ?v=Date.now(): de browser mag het antwoord
+  // bewaren maar revalideert elke load met de ETag van GitHub Pages. Ongewijzigde
+  // data -> 304 (lege body, geen 270 KB opnieuw); nieuwe data -> verse download.
+  // De content-ETag ís de cache-buster; een query die per load verandert zou de
+  // cache juist nutteloos maken.
+  const res = await fetchFn(CONFIG.dataUrl, { cache: "no-cache" });
   if (!res.ok) throw new Error(`forecast laden faalde: ${res.status}`);
   return res.json();
 }

@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Vloerkoelingradar</title>
   <link rel="icon" href="data:," />
+  <!-- Warmt de ES-module-graph (app.js + zijn imports) al tijdens het parsen,
+       zodat de forecast-fetch eerder kan starten i.p.v. pas na het laden van app.js. -->
+  <link rel="modulepreload" href="app.js" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>

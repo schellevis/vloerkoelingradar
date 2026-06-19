@@ -39,14 +39,17 @@ test("isStale true beyond staleHours", () => {
   assert.equal(isStale(gen, Date.parse("2026-06-17T13:00:00+02:00"), 12), true);
 });
 
-test("loadForecast uses no-store and returns json", async () => {
-  let seenInit;
+test("loadForecast revalidates via no-cache without a per-load query buster", async () => {
+  let seenUrl, seenInit;
   const fakeFetch = async (url, init) => {
+    seenUrl = url;
     seenInit = init;
-    assert.ok(url.includes("?v="));
     return { ok: true, json: async () => ({ ok: 1 }) };
   };
   const data = await loadForecast(fakeFetch);
   assert.deepEqual(data, { ok: 1 });
-  assert.equal(seenInit.cache, "no-store");
+  // Geen "?v="-buster: die zou de cache per load nutteloos maken. De ETag van
+  // GitHub Pages revalideert (no-cache) en fungeert als content-buster.
+  assert.ok(!seenUrl.includes("?v="));
+  assert.equal(seenInit.cache, "no-cache");
 });
