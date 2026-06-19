@@ -69,7 +69,7 @@ export function renderNow(els, { dew, margin, minSupply }) {
   els.verdict.style.background = `var(${lvl.colorVar})`;
   els.dewpoint.textContent = `dauwpunt ${dew.toFixed(1)}°`;
   const x = recommendedSupply(dew, margin, minSupply);
-  els.advice.textContent = `houd je aanvoer boven ${x.toFixed(1)}°`;
+  els.advice.textContent = `houd je doel boven ${x.toFixed(1)}°`;
 }
 
 export function renderDayRanges(el, { hours, dewpoint, selIndex }) {
