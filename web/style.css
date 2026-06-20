@@ -97,3 +97,4 @@ svg { display: block; width: 100%; height: auto; }
 #nl-map path:focus-visible { outline: none; stroke: var(--accent); stroke-width: 1.6; }
 
 @media (max-width: 420px) { main { padding: 10px; } }
+footer { text-align: center; padding: 8px var(--space) 20px; font-size: 11px; color: var(--muted); }
