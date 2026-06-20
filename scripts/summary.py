@@ -31,17 +31,25 @@ SYSTEM = (
 )
 
 
-def aggregate(forecast, days=4):
+def aggregate(forecast, days=4, now=None):
     """Comprimeert de forecast tot landelijke min/gemiddeld/max dauwpunt per dag.
 
     Beperkt tot de eerste `days` kalenderdagen — genoeg context voor een paar
     zinnen, en weinig tokens (i.p.v. honderden plaatsen x honderden uren).
+
+    `now` (een label/ISO-string) negeert al voorbije uren, zodat de eerste dag
+    vanaf het huidige uur telt i.p.v. een daggemiddelde dat door de al verstreken
+    (koele) nacht omlaag wordt getrokken. Uur-labels zijn lexicografisch te
+    vergelijken, dus we knippen beide op "YYYY-MM-DDTHH".
     """
     hours = forecast["hours"]
     places = forecast["places"]
+    cutoff = now[:13] if now else None
     by_date = []          # volgorde van kalenderdagen
     idx_by_date = {}      # date -> uur-indices
     for i, h in enumerate(hours):
+        if cutoff and h[:13] < cutoff:
+            continue
         d = h[:10]
         if d not in idx_by_date:
             if len(by_date) >= days:
@@ -107,7 +115,7 @@ def generate_summary(forecast, *, token, days=4, model=DEFAULT_MODEL,
                      urlopen=urllib.request.urlopen):
     """Geeft een landelijke indruk-tekst of None als er iets misgaat."""
     try:
-        agg = aggregate(forecast, days=days)
+        agg = aggregate(forecast, days=days, now=forecast.get("generated_at"))
         if not agg:
             return None
         messages = build_prompt(agg, forecast.get("generated_at", ""))
