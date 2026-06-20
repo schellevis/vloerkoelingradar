@@ -54,6 +54,15 @@ class TestAggregate(unittest.TestCase):
             agg[1], {"date": "2026-06-20", "dew_min": 11.0, "dew_max": 21.0, "dew_mean": 15.0}
         )
 
+    def test_first_day_starts_at_now(self):
+        # now = 12:00 op dag 1 -> de al voorbije 00:00-waarden tellen niet mee.
+        agg = aggregate(FORECAST, days=2, now="2026-06-19T12:00")
+        self.assertEqual(
+            agg[0], {"date": "2026-06-19", "dew_min": 14.0, "dew_max": 20.0, "dew_mean": 17.0}
+        )
+        # Latere dagen liggen volledig in de toekomst en blijven ongewijzigd.
+        self.assertEqual(agg[1]["dew_max"], 21.0)
+
     def test_skips_none_values(self):
         fc = {**FORECAST, "places": [{"name": "A", "dewpoint": [None, 14.0, None, None, None]}]}
         agg = aggregate(fc, days=1)
