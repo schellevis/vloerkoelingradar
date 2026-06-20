@@ -14,12 +14,29 @@ import urllib.request
 ENDPOINT = "https://models.github.ai/inference/chat/completions"
 DEFAULT_MODEL = "openai/gpt-4o-mini"
 
-# Drempels spiegelen web/config.js (levels). Hier puur als prompttekst, zodat het
-# model consistent met de UI-kleuren duidt; de Python-job classificeert zelf niet.
+# Drempels spiegelen web/config.js (levels). LEVELS_TEXT gaat in de prompt zodat
+# het model de UI-labels herkent; _classify() past dezelfde drempels toe in Python
+# zodat de LLM de classificatie niet zelf hoeft te raden.
 LEVELS_TEXT = (
     "Beoordeling gebeurt op het dauwpunt: t/m 16°C volop koelen, 16–18°C gematigd, "
     "18–21°C beperkt, boven 21°C niet koelen."
 )
+
+
+def _classify(dewpoint):
+    """Dauwpunt → level-label, spiegelt web/config.js levels.
+
+    Drempels moeten gelijk blijven aan LEVELS_TEXT; daar staat dezelfde tabel
+    in prompt-vorm zodat de LLM de UI-labels herkent.
+    """
+    if dewpoint <= 16:
+        return "volop koelen"
+    if dewpoint <= 18:
+        return "gematigd"
+    if dewpoint <= 21:
+        return "beperkt"
+    return "niet koelen"
+
 
 SYSTEM = (
     "Je bent een nuchtere Nederlandse weerduider voor een 'buienradar voor "
@@ -27,7 +44,12 @@ SYSTEM = (
     "snapt of vloerkoeling de komende dagen veilig kan. Schrijf in het Nederlands, "
     "2 tot 4 zinnen, zonder opsommingstekens en zonder markdown. Verzin geen "
     "getallen; gebruik alleen de aangeleverde waarden. Noem niet elke dag apart als "
-    "dat weinig toevoegt; benoem vooral de trend en eventuele risicodagen."
+    "dat weinig toevoegt; benoem vooral de trend en eventuele risicodagen.\n\n"
+    "De classificatie per dag is al voor je gedaan (volop koelen, gematigd, "
+    "beperkt, niet koelen) o.b.v. het dauwpunt. Het slechtste uur van de dag "
+    "bepaalt het veiligheidsoordeel: als de max boven 21°C zit mag je een deel "
+    "van de dag niet koelen, ook al is de min nog 'volop'. Gebruik die labels "
+    "letterlijk en consistent met de UI."
 )
 
 
@@ -75,10 +97,11 @@ def aggregate(forecast, days=4, now=None):
 def build_prompt(agg, generated_at):
     """Bouwt de chat-messages uit de geaggregeerde dagcijfers."""
     lines = [LEVELS_TEXT, "", f"Gegenereerd: {generated_at}.",
-             "Landelijk dauwpunt (°C) per dag:"]
+             "Landelijk dauwpunt (°C) per dag met classificatie:"]
     for d in agg:
         lines.append(
-            f"- {d['date']}: min {d['dew_min']}, gemiddeld {d['dew_mean']}, max {d['dew_max']}"
+            f"- {d['date']}: min {d['dew_min']} ({_classify(d['dew_min'])}), "
+            f"gemiddeld {d['dew_mean']}, max {d['dew_max']} ({_classify(d['dew_max'])})"
         )
     lines.append("")
     lines.append("Geef een korte algemene indruk van de koelomstandigheden in Nederland.")
