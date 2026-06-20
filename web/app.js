@@ -157,6 +157,8 @@ async function init() {
   }
   state.places = state.forecast.places;
   state.byCode = Object.fromEntries(state.places.map((p) => [p.code, p]));
+  $("generated-footer").textContent =
+    `Gegenereerd op ${new Date(state.forecast.generated_at).toLocaleString("nl-NL")}`;
   if (isStale(state.forecast.generated_at, Date.now())) {
     showBanner(`Let op: data is van ${new Date(state.forecast.generated_at).toLocaleString("nl-NL")} en mogelijk verouderd.`);
   }
