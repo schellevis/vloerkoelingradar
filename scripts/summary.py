@@ -7,6 +7,7 @@ optioneel — bij elke fout geeft generate_summary() None terug zodat de build
 gewoon doorloopt en forecast.json zonder 'summary' wordt weggeschreven.
 """
 import json
+import statistics
 import urllib.request
 
 # OpenAI-compatibel inferentie-endpoint van GitHub Models. Werkt met de Actions
@@ -45,22 +46,32 @@ SYSTEM = (
     "2 tot 4 zinnen, zonder opsommingstekens en zonder markdown. Verzin geen "
     "getallen; gebruik alleen de aangeleverde waarden. Noem niet elke dag apart als "
     "dat weinig toevoegt; benoem vooral de trend en eventuele risicodagen.\n\n"
-    "De classificatie per dag is al voor je gedaan (volop koelen, gematigd, "
-    "beperkt, niet koelen) o.b.v. het dauwpunt. Het slechtste uur van de dag "
-    "bepaalt het veiligheidsoordeel: als de max boven 21°C zit mag je een deel "
-    "van de dag niet koelen, ook al is de min nog 'volop'. Gebruik die labels "
-    "letterlijk en consistent met de UI."
+    "Het algemene beeld per dag baseer je op het mediane dauwpunt — dat is wat de "
+    "doorsnee gemeente ervaart, en sluit aan bij wat iemand op de eigen "
+    "forecast-grafiek ziet. De classificatie daarvan (volop koelen, gematigd, "
+    "beperkt, niet koelen) is al voor je gedaan; gebruik die labels letterlijk en "
+    "consistent met de UI. De meegeleverde spreiding (laagste–hoogste) is de "
+    "landelijke bandbreedte over alle gemeenten en uren: dat zijn de uitersten, "
+    "niet het algemene beeld. Noem een hoge bovenkant hooguit als nuance voor "
+    "warmere of vochtigere regio's, en laat 'm het landelijke oordeel niet "
+    "domineren."
 )
 
 
 def aggregate(forecast, days=4, now=None):
-    """Comprimeert de forecast tot landelijke min/gemiddeld/max dauwpunt per dag.
+    """Comprimeert de forecast tot landelijk min/mediaan/max dauwpunt per dag.
+
+    De **mediaan** is de centrale maat (wat de doorsnee gemeente ervaart) en
+    bepaalt straks de classificatie; min/max blijven mee als landelijke
+    spreiding (uitersten) — robuuster dan het gemiddelde, dat door een handvol
+    warme/vochtige uitschieters omhoog werd getrokken en de samenvatting
+    alarmerender maakte dan de lokale forecast-grafiek.
 
     Beperkt tot de eerste `days` kalenderdagen — genoeg context voor een paar
     zinnen, en weinig tokens (i.p.v. honderden plaatsen x honderden uren).
 
     `now` (een label/ISO-string) negeert al voorbije uren, zodat de eerste dag
-    vanaf het huidige uur telt i.p.v. een daggemiddelde dat door de al verstreken
+    vanaf het huidige uur telt i.p.v. een dagcijfer dat door de al verstreken
     (koele) nacht omlaag wordt getrokken. Uur-labels zijn lexicografisch te
     vergelijken, dus we knippen beide op "YYYY-MM-DDTHH".
     """
@@ -89,7 +100,7 @@ def aggregate(forecast, days=4, now=None):
             "date": d,
             "dew_min": round(min(vals), 1),
             "dew_max": round(max(vals), 1),
-            "dew_mean": round(sum(vals) / len(vals), 1),
+            "dew_median": round(statistics.median(vals), 1),
         })
     return out
 
@@ -97,11 +108,13 @@ def aggregate(forecast, days=4, now=None):
 def build_prompt(agg, generated_at):
     """Bouwt de chat-messages uit de geaggregeerde dagcijfers."""
     lines = [LEVELS_TEXT, "", f"Gegenereerd: {generated_at}.",
-             "Landelijk dauwpunt (°C) per dag met classificatie:"]
+             "Landelijk dauwpunt (°C) per dag — mediaan bepaalt het beeld, "
+             "min–max is de landelijke spreiding (uitersten):"]
     for d in agg:
         lines.append(
-            f"- {d['date']}: min {d['dew_min']} ({_classify(d['dew_min'])}), "
-            f"gemiddeld {d['dew_mean']}, max {d['dew_max']} ({_classify(d['dew_max'])})"
+            f"- {d['date']}: doorgaans {d['dew_median']} "
+            f"({_classify(d['dew_median'])}); landelijke spreiding "
+            f"{d['dew_min']}–{d['dew_max']}"
         )
     lines.append("")
     lines.append("Geef een korte algemene indruk van de koelomstandigheden in Nederland.")

@@ -47,18 +47,21 @@ class TestAggregate(unittest.TestCase):
     def test_groups_first_n_days(self):
         agg = aggregate(FORECAST, days=2)
         self.assertEqual(len(agg), 2)
+        # Dag 1 uren: A=[10,14], B=[12,20] -> mediaan van {10,12,14,20} = 13.0
         self.assertEqual(
-            agg[0], {"date": "2026-06-19", "dew_min": 10.0, "dew_max": 20.0, "dew_mean": 14.0}
+            agg[0], {"date": "2026-06-19", "dew_min": 10.0, "dew_max": 20.0, "dew_median": 13.0}
         )
+        # Dag 2 uren: A=[12,16], B=[11,21] -> mediaan van {11,12,16,21} = 14.0
         self.assertEqual(
-            agg[1], {"date": "2026-06-20", "dew_min": 11.0, "dew_max": 21.0, "dew_mean": 15.0}
+            agg[1], {"date": "2026-06-20", "dew_min": 11.0, "dew_max": 21.0, "dew_median": 14.0}
         )
 
     def test_first_day_starts_at_now(self):
         # now = 12:00 op dag 1 -> de al voorbije 00:00-waarden tellen niet mee.
+        # Resterende dag-1-waarden: A=14, B=20 -> mediaan = 17.0
         agg = aggregate(FORECAST, days=2, now="2026-06-19T12:00")
         self.assertEqual(
-            agg[0], {"date": "2026-06-19", "dew_min": 14.0, "dew_max": 20.0, "dew_mean": 17.0}
+            agg[0], {"date": "2026-06-19", "dew_min": 14.0, "dew_max": 20.0, "dew_median": 17.0}
         )
         # Latere dagen liggen volledig in de toekomst en blijven ongewijzigd.
         self.assertEqual(agg[1]["dew_max"], 21.0)
@@ -67,6 +70,7 @@ class TestAggregate(unittest.TestCase):
         fc = {**FORECAST, "places": [{"name": "A", "dewpoint": [None, 14.0, None, None, None]}]}
         agg = aggregate(fc, days=1)
         self.assertEqual(agg[0]["dew_min"], 14.0)
+        self.assertEqual(agg[0]["dew_median"], 14.0)
 
 
 class TestPrompt(unittest.TestCase):
