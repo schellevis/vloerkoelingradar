@@ -81,7 +81,7 @@ svg { display: block; width: 100%; height: auto; }
 .live::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: var(--accent); animation: ping 1.8s cubic-bezier(0, 0, .2, 1) infinite; }
 @keyframes ping { 75%, 100% { transform: scale(2.6); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .live::after { animation: none; } }
-.chart { position: relative; height: 160px; margin-left: 30px; border-left: 1px solid var(--chart-axis); border-bottom: 1px solid var(--chart-axis); }
+.chart { position: relative; height: 160px; margin: 28px 0 0 30px; border-left: 1px solid var(--chart-axis); border-bottom: 1px solid var(--chart-axis); }
 .chart svg { position: absolute; inset: 0; height: 100%; }
 .maxbadge { position: absolute; transform: translate(-50%,-130%); color: #fff; font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
 .scrub { position: absolute; top: 0; bottom: 0; border-left: 2px solid var(--accent); }
