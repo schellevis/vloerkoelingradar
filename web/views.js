@@ -133,15 +133,29 @@ export function renderHourChart(el, { hours, dewpoint, selIndex }) {
     el.innerHTML = `<p class="muted">Te weinig data om een grafiek te tonen.</p>`;
     return;
   }
-  const lo = Math.min(...present) - 1;
-  const hi = Math.max(...present) + 1;
+  const ticks = [];
+  for (let tick = CONFIG.dewAxis.max; tick >= CONFIG.dewAxis.min; tick -= 2) {
+    ticks.push(tick);
+  }
   const X = (i) => (i / (n - 1)) * 100;
-  const Y = (v) => 100 - ((v - lo) / (hi - lo)) * 100;
+  const Y = (v) => 100 - dewToScale(v) * 100;
   const pts = vals
     .map((v, i) => (v == null ? null : `${X(i)},${Y(v)}`))
     .filter(Boolean)
     .join(" ");
   const days = groupByDay(hours, dewpoint);
+  const yTicks = ticks
+    .map((tick) => {
+      const kind = tick % 4 === 0 ? "major" : "minor";
+      return `<span class="chart-y-tick ${kind}" style="top:${Y(tick)}%">${tick}°</span>`;
+    })
+    .join("");
+  const grid = ticks
+    .map((tick) => {
+      const kind = tick % 4 === 0 ? "major" : "minor";
+      return `<div class="chart-gridline ${kind}" style="top:${Y(tick)}%"></div>`;
+    })
+    .join("");
   const badges = days
     .map((d) => {
       // Kies het hoogste dauwpunt van de dag, null-waarden negerend.
@@ -154,8 +168,17 @@ export function renderHourChart(el, { hours, dewpoint, selIndex }) {
       )}%;background:${c}">${Math.round(dewpoint[i])}°</span>`;
     })
     .join("");
-  // Verticale scheidslijn aan het begin van elke dag (behalve de eerste), zodat
-  // zichtbaar is waar een dag ophoudt en de volgende begint.
+  const bands = days
+    .map((d, i) => {
+      const last = d.indices[d.indices.length - 1];
+      const left = X(d.indices[0]);
+      const width = Math.max(1, X(last) - left);
+      const cls = i % 2 === 0 ? "even" : "odd";
+      return `<div class="day-band ${cls}" style="left:${left}%;width:${width}%"></div>`;
+    })
+    .join("");
+  // Subtiele dagmarkering aan de onderrand; de horizontale hulplijnen blijven
+  // leidend zodat de grafiek niet als dubbel raster leest.
   const dividers = days
     .slice(1)
     .map((d) => `<div class="day-divider" style="left:${X(d.indices[0])}%"></div>`)
@@ -172,13 +195,18 @@ export function renderHourChart(el, { hours, dewpoint, selIndex }) {
       )}</span>`;
     })
     .join("");
-  el.innerHTML = `<div class="chart">
-    ${dividers}
-    ${badges}
-    <svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="Verwacht dauwpunt per uur over ${days.length} dagen">
-      <polyline points="${pts}" fill="none" stroke="${cssColor("--chart-line")}" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
-    </svg>
-    <div class="scrub" style="left:${X(selIndex)}%"></div>
+  el.innerHTML = `<div class="chart-wrap">
+    <div class="chart-axis" aria-hidden="true">${yTicks}</div>
+    <div class="chart">
+      ${bands}
+      ${grid}
+      ${dividers}
+      ${badges}
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="Verwacht dauwpunt per uur over ${days.length} dagen">
+        <polyline points="${pts}" fill="none" stroke="${cssColor("--chart-line")}" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
+      </svg>
+      <div class="scrub" style="left:${X(selIndex)}%"></div>
+    </div>
   </div>
   <div class="day-labels">${labels}</div>`;
 }

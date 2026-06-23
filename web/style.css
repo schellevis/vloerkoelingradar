@@ -81,12 +81,22 @@ svg { display: block; width: 100%; height: auto; }
 .live::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: var(--accent); animation: ping 1.8s cubic-bezier(0, 0, .2, 1) infinite; }
 @keyframes ping { 75%, 100% { transform: scale(2.6); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .live::after { animation: none; } }
-.chart { position: relative; height: 160px; margin: 28px 0 0 30px; border-left: 1px solid var(--chart-axis); border-bottom: 1px solid var(--chart-axis); }
+.chart-wrap { position: relative; margin-top: 28px; padding-left: 42px; }
+.chart-axis { position: absolute; inset: 0 auto 0 0; width: 38px; }
+.chart-y-tick { position: absolute; right: 8px; transform: translateY(-50%); font-size: 10px; color: var(--muted); line-height: 1; white-space: nowrap; }
+.chart-y-tick.major { color: var(--text); font-weight: 600; }
+.day-band { position: absolute; top: 0; bottom: 0; pointer-events: none; }
+.day-band.even { background: rgba(255,255,255,.03); }
+.day-band.odd { background: rgba(255,255,255,.06); }
+.chart-gridline { position: absolute; left: 0; right: 0; border-top: 1px solid var(--chart-axis); pointer-events: none; }
+.chart-gridline.minor { opacity: .28; }
+.chart-gridline.major { opacity: .5; }
+.chart { position: relative; height: 160px; margin: 0; border-left: 1px solid var(--chart-axis); border-bottom: 1px solid var(--chart-axis); }
 .chart svg { position: absolute; inset: 0; height: 100%; }
 .maxbadge { position: absolute; transform: translate(-50%,-130%); color: #fff; font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
 .scrub { position: absolute; top: 0; bottom: 0; border-left: 2px solid var(--accent); }
-.day-divider { position: absolute; top: 0; bottom: 0; border-left: 1px dashed var(--chart-axis); }
-.day-labels { position: relative; height: 16px; margin: 4px 0 0 30px; }
+.day-divider { position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--chart-axis); opacity: .18; pointer-events: none; }
+.day-labels { position: relative; height: 16px; margin: 4px 0 0 42px; }
 .day-label { position: absolute; bottom: 0; padding-left: 3px; font-size: 11px; font-weight: 600; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .day-toggle { display: flex; gap: 4px; }
 .day-toggle button { padding: 3px 9px; font-size: 12px; }
