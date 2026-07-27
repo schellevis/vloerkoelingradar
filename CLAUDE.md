@@ -47,18 +47,30 @@ de data-job, nooit in de browser. GitHub Models is uitgefaseerd; dit verving het
   live vergelijking van de Go-modellen op dit endpoint: veel ervan
   (`deepseek-v4-flash`, `glm-5`, `kimi-k2.5`, …) zijn reasoning-modellen die hun
   `reasoning_content` laten meetellen in `max_tokens` en daardoor de zichtbare
-  `content` afkappen (`finish_reason: "length"`, lege of afgebroken tekst) bij
-  `max_tokens: 400`. `mimo-v2.5` (en `minimax-m2.5` als alternatief) leveren
-  consistent complete, natuurlijke NL-tekst met `finish_reason: "stop"` en laag
-  reasoning-overhead. Verander dit niet zonder eerst met een losse curl-call te
-  checken dat `finish_reason` `"stop"` is en `content` niet leeg/afgekapt is.
+  `content` afkappen (`finish_reason: "length"`, lege of afgebroken tekst).
+  `mimo-v2.5` levert het meest consistent complete, natuurlijke NL-tekst.
+  Verander dit niet zonder eerst met een losse curl-call te checken dat
+  `finish_reason` `"stop"` is en `content` niet leeg/afgekapt is.
+- **`mimo-v2.5` is zélf ook een reasoning-model.** `reasoning_content` telt mee
+  in `max_tokens`, en het verbruik daarvan is **niet stabiel bij
+  `temperature: 0`** — bij identieke prompts varieerde het in tests van ~200
+  tot ~550 reasoning-tokens. Daarom staat `MAX_TOKENS` in `summary.py` op
+  **1200** (ruime marge), niet op een krappe waarde — anders knipt de
+  samenvatting af zonder foutmelding (de fail-safe vangt dat stil op als lege
+  `content`, niet als exception).
 - **Override zonder code-wijziging:** env-var **`OPENCODE_MODEL`** in de
   workflow. Token via Actions secret **`OPENCODE_API_KEY`** (Bearer-token, geen
   `permissions:` nodig — geen GitHub-eigen API meer).
-- **Parameters:** `temperature: 0` (stabiele diffs), `max_tokens: 400`.
+- **Parameters:** `temperature: 0` (stabiele diffs), `max_tokens: 1200`
+  (`MAX_TOKENS` in `summary.py` — zie hierboven waarom dit ruim zit).
+- **User-Agent verplicht:** Cloudflare vóór `opencode.ai` blokkeert urllib's
+  default `Python-urllib/x.y`-header (Cloudflare-error 1010,
+  `browser_signature_banned`) — de request zet daarom altijd een eigen
+  `User-Agent`. Zonder die header faalt elke call met HTTP 403, stil opgevangen
+  door de fail-safe (dus zonder duidelijke foutmelding in de Actions-log).
 - **Kosten:** betaald maandabonnement (Go), geen per-request rate-limit-tabel
-  zoals GitHub Models. De cron doet ~4 calls/dag (elke 6 u) met een paar
-  honderd tokens per call — verwaarloosbaar binnen het abonnement.
+  zoals GitHub Models. De cron doet ~4 calls/dag (elke 6 u) met hooguit een
+  paar duizend tokens per call — verwaarloosbaar binnen het abonnement.
 - **Fail-safe:** bij elke fout geeft `generate_summary` `None` → forecast.json
   wordt zonder `summary` weggeschreven; de build breekt nooit.
 

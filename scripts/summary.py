@@ -15,11 +15,16 @@ import urllib.request
 # https://opencode.ai/docs/go/). Werkt met een OpenCode API-key via
 # Authorization: Bearer <key> — geen third-party libs nodig, gewoon urllib.
 ENDPOINT = "https://opencode.ai/zen/go/v1/chat/completions"
-# mimo-v2.5: klein/snel model, laag reasoning-overhead (blijft ruim binnen
-# max_tokens) en levert consistent bruikbare NL-tekst — geverifieerd tegen de
-# live API. Andere Go-modellen (bv. deepseek-v4-flash, glm-5, kimi-k2.5) zijn
-# reasoning-modellen die met max_tokens=400 vaak afkappen vóór de content.
+# mimo-v2.5: klein/snel model dat consistent bruikbare NL-tekst aflevert —
+# geverifieerd tegen de live API. Het is wél een reasoning-model: het verstopt
+# gedachtestappen in reasoning_content, dat meetelt in max_tokens. Het
+# tokenverbruik daarvan varieerde in tests van ~200 tot ~550 tokens bij
+# identieke prompts (temperature=0 voorkomt dat dus niet) — MAX_TOKENS heeft
+# daarom ruime marge. Andere Go-modellen (bv. deepseek-v4-flash, glm-5,
+# kimi-k2.5) hebben nog veel hogere/onvoorspelbaardere reasoning-overhead en
+# kapten de zichtbare content vaker af.
 DEFAULT_MODEL = "mimo-v2.5"
+MAX_TOKENS = 1200
 
 # Drempels spiegelen web/config.js (levels). LEVELS_TEXT gaat in de prompt zodat
 # het model de UI-labels herkent; _classify() past dezelfde drempels toe in Python
@@ -131,7 +136,7 @@ def build_prompt(agg, generated_at):
 
 
 def call_opencode(messages, token, *, model=DEFAULT_MODEL, endpoint=ENDPOINT,
-                  temperature=0, max_tokens=400, timeout=30,
+                  temperature=0, max_tokens=MAX_TOKENS, timeout=30,
                   urlopen=urllib.request.urlopen):
     """POST naar OpenCode Go en geeft de tekst van de eerste keuze terug."""
     body = json.dumps({
@@ -146,6 +151,10 @@ def call_opencode(messages, token, *, model=DEFAULT_MODEL, endpoint=ENDPOINT,
             "Content-Type": "application/json",
             "Authorization": f"Bearer {token}",
             "Accept": "application/json",
+            # Cloudflare voor opencode.ai blokkeert urllib's default
+            # "Python-urllib/x.y" User-Agent (error 1010); een eigen waarde
+            # is genoeg om erlangs te komen.
+            "User-Agent": "vloerkoelingradar-forecast-job/1.0",
         },
     )
     with urlopen(req, timeout=timeout) as resp:
