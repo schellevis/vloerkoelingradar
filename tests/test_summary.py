@@ -4,7 +4,7 @@ import os
 import tempfile
 import unittest
 
-from scripts.summary import aggregate, build_prompt, call_github_models, generate_summary
+from scripts.summary import aggregate, build_prompt, call_opencode, generate_summary
 from scripts.fetch_forecast import run
 
 FORECAST = {
@@ -92,7 +92,7 @@ class TestCall(unittest.TestCase):
             seen["body"] = json.loads(req.data.decode())
             return FakeResp({"choices": [{"message": {"content": "  Prima koelweer.  "}}]})
 
-        out = call_github_models([{"role": "user", "content": "x"}], "tok", urlopen=fake)
+        out = call_opencode([{"role": "user", "content": "x"}], "tok", urlopen=fake)
         self.assertEqual(out, "Prima koelweer.")
         self.assertEqual(seen["auth"], "Bearer tok")
         self.assertEqual(seen["body"]["temperature"], 0)

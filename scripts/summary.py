@@ -1,19 +1,25 @@
 # scripts/summary.py
-"""Genereert een korte landelijke dauwpunt-indruk via GitHub Models.
+"""Genereert een korte landelijke dauwpunt-indruk via OpenCode Go.
 
 Draait alleen in de data-job (nooit in de browser). Stdlib-only: de call gaat
-met urllib naar het OpenAI-compatibele GitHub Models-endpoint. De samenvatting is
-optioneel — bij elke fout geeft generate_summary() None terug zodat de build
-gewoon doorloopt en forecast.json zonder 'summary' wordt weggeschreven.
+met urllib naar het OpenAI-compatibele OpenCode Go chat/completions-endpoint. De
+samenvatting is optioneel — bij elke fout geeft generate_summary() None terug
+zodat de build gewoon doorloopt en forecast.json zonder 'summary' wordt
+weggeschreven.
 """
 import json
 import statistics
 import urllib.request
 
-# OpenAI-compatibel inferentie-endpoint van GitHub Models. Werkt met de Actions
-# GITHUB_TOKEN mits de workflow `models: read` heeft.
-ENDPOINT = "https://models.github.ai/inference/chat/completions"
-DEFAULT_MODEL = "openai/gpt-4o-mini"
+# OpenAI-compatibel inferentie-endpoint van OpenCode Go (betaald abonnement,
+# https://opencode.ai/docs/go/). Werkt met een OpenCode API-key via
+# Authorization: Bearer <key> — geen third-party libs nodig, gewoon urllib.
+ENDPOINT = "https://opencode.ai/zen/go/v1/chat/completions"
+# mimo-v2.5: klein/snel model, laag reasoning-overhead (blijft ruim binnen
+# max_tokens) en levert consistent bruikbare NL-tekst — geverifieerd tegen de
+# live API. Andere Go-modellen (bv. deepseek-v4-flash, glm-5, kimi-k2.5) zijn
+# reasoning-modellen die met max_tokens=400 vaak afkappen vóór de content.
+DEFAULT_MODEL = "mimo-v2.5"
 
 # Drempels spiegelen web/config.js (levels). LEVELS_TEXT gaat in de prompt zodat
 # het model de UI-labels herkent; _classify() past dezelfde drempels toe in Python
@@ -124,10 +130,10 @@ def build_prompt(agg, generated_at):
     ]
 
 
-def call_github_models(messages, token, *, model=DEFAULT_MODEL, endpoint=ENDPOINT,
-                       temperature=0, max_tokens=400, timeout=30,
-                       urlopen=urllib.request.urlopen):
-    """POST naar GitHub Models en geeft de tekst van de eerste keuze terug."""
+def call_opencode(messages, token, *, model=DEFAULT_MODEL, endpoint=ENDPOINT,
+                  temperature=0, max_tokens=400, timeout=30,
+                  urlopen=urllib.request.urlopen):
+    """POST naar OpenCode Go en geeft de tekst van de eerste keuze terug."""
     body = json.dumps({
         "model": model,
         "messages": messages,
@@ -155,7 +161,7 @@ def generate_summary(forecast, *, token, days=4, model=DEFAULT_MODEL,
         if not agg:
             return None
         messages = build_prompt(agg, forecast.get("generated_at", ""))
-        text = call_github_models(messages, token, model=model, urlopen=urlopen)
+        text = call_opencode(messages, token, model=model, urlopen=urlopen)
         return text or None
     except Exception:  # noqa: BLE001 - samenvatting is optioneel; nooit de build breken
         return None

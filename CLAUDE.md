@@ -35,22 +35,30 @@ De browser raakt Open-Meteo nooit aan — alleen de Python-job doet dat.
 
 ## LLM-model (landelijke indruk)
 
-De optionele `summary` wordt gegenereerd via **GitHub Models** (OpenAI-compatibel
-endpoint, stdlib `urllib`, in `scripts/summary.py`). Alleen in de data-job, nooit
-in de browser.
+De optionele `summary` wordt gegenereerd via **OpenCode Go** (OpenAI-compatibel
+chat/completions-endpoint, stdlib `urllib`, in `scripts/summary.py`). Alleen in
+de data-job, nooit in de browser. GitHub Models is uitgefaseerd; dit verving het
+1-op-1 (zelfde functiesignatuur, alleen endpoint/model/token gewisseld).
 
-- **Default model: `openai/gpt-4o-mini`** (`DEFAULT_MODEL` in `summary.py`).
-  Low-tier: snel/goedkoop, ruim genoeg voor een paar zinnen duiding op kale
-  dagcijfers.
-- **Override zonder code-wijziging:** env-var **`GITHUB_MODELS_MODEL`** in de
-  workflow (bijv. `openai/gpt-4o`). Token via Actions `GITHUB_TOKEN` +
-  `permissions: models: read`.
+- **Endpoint:** `https://opencode.ai/zen/go/v1/chat/completions` (`ENDPOINT` in
+  `summary.py`) — hoort bij het betaalde Go-abonnement
+  (https://opencode.ai/docs/go/), niet het pay-as-you-go Zen-endpoint.
+- **Default model: `mimo-v2.5`** (`DEFAULT_MODEL` in `summary.py`). Gekozen na
+  live vergelijking van de Go-modellen op dit endpoint: veel ervan
+  (`deepseek-v4-flash`, `glm-5`, `kimi-k2.5`, …) zijn reasoning-modellen die hun
+  `reasoning_content` laten meetellen in `max_tokens` en daardoor de zichtbare
+  `content` afkappen (`finish_reason: "length"`, lege of afgebroken tekst) bij
+  `max_tokens: 400`. `mimo-v2.5` (en `minimax-m2.5` als alternatief) leveren
+  consistent complete, natuurlijke NL-tekst met `finish_reason: "stop"` en laag
+  reasoning-overhead. Verander dit niet zonder eerst met een losse curl-call te
+  checken dat `finish_reason` `"stop"` is en `content` niet leeg/afgekapt is.
+- **Override zonder code-wijziging:** env-var **`OPENCODE_MODEL`** in de
+  workflow. Token via Actions secret **`OPENCODE_API_KEY`** (Bearer-token, geen
+  `permissions:` nodig — geen GitHub-eigen API meer).
 - **Parameters:** `temperature: 0` (stabiele diffs), `max_tokens: 400`.
-- **Rate limits** gelden per account/token, niet per repo. De cron doet ~4 calls
-  per dag (elke 6 u), wat ruim onder zelfs de gratis limieten zit (low-tier
-  ~150 req/dag; high-tier ~50 req/dag; een betaald Copilot-plan verhoogt dit).
-  GitHub Models staat los van Copilot "premium requests". Exacte tabel:
-  https://docs.github.com/en/github-models/prototyping-with-ai-models#rate-limits
+- **Kosten:** betaald maandabonnement (Go), geen per-request rate-limit-tabel
+  zoals GitHub Models. De cron doet ~4 calls/dag (elke 6 u) met een paar
+  honderd tokens per call — verwaarloosbaar binnen het abonnement.
 - **Fail-safe:** bij elke fout geeft `generate_summary` `None` → forecast.json
   wordt zonder `summary` weggeschreven; de build breekt nooit.
 
@@ -64,7 +72,7 @@ scripts/
   places.py          # laadt places.json -> PLACES
   forecast_build.py  # build_forecast(...) + validate(...) (pure); neemt 'code' mee
   fetch_forecast.py  # fetch_all() batching/retry + run() schrijft veilig weg
-  summary.py         # optionele landelijke dauwpunt-indruk via GitHub Models (stdlib urllib)
+  summary.py         # optionele landelijke dauwpunt-indruk via OpenCode Go (stdlib urllib)
   gen_search_list.py # genereert web/places-search.json uit PLACES
 web/
   config.js   # ALLE tunables: levels/drempels, defaults, limits, dewAxis, nlBbox, model
@@ -127,7 +135,7 @@ python3 -m unittest discover -s tests    # Python-tests
   (met `[skip ci]`; de workflow heeft géén push-trigger op data om self-trigger te
   vermijden).
 - **De landelijke indruk (`summary`) is optioneel.** De data-job vult 'm alleen als
-  er een token is (Actions `GITHUB_TOKEN` + `models: read`); faalt de LLM-call dan
+  er een key is (Actions secret `OPENCODE_API_KEY`); faalt de LLM-call dan
   geeft `generate_summary` `None` en schrijven we forecast.json zonder veld. De
   client toont 'm via `renderSummary` (met `textContent`, niet `innerHTML`: modeltekst
   is minder vertrouwd dan de KNMI-cijfers) en `validateForecast` vereist 'm niet.

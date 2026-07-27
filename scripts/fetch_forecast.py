@@ -85,10 +85,10 @@ def _now_amsterdam_iso():
 
 
 if __name__ == "__main__":
-    # GitHub Models gebruikt de Actions GITHUB_TOKEN (workflow heeft `models: read`).
-    # Zonder token slaan we de samenvatting stil over.
-    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GITHUB_MODELS_TOKEN")
-    model = os.environ.get("GITHUB_MODELS_MODEL")
+    # OpenCode Go-key als Actions secret. Zonder key slaan we de samenvatting
+    # stil over.
+    token = os.environ.get("OPENCODE_API_KEY")
+    model = os.environ.get("OPENCODE_MODEL")
     make_summary = None
     if token:
         kwargs = {"token": token}

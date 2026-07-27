@@ -7,20 +7,19 @@ model-info zodat agents 'm snel vinden.
 ## LLM-model (landelijke indruk)
 
 De optionele `summary` in `web/data/forecast.json` wordt gegenereerd via
-**GitHub Models** (OpenAI-compatibel endpoint, stdlib `urllib`, in
-`scripts/summary.py`). Alleen in de data-job, nooit in de browser.
+**OpenCode Go** (OpenAI-compatibel chat/completions-endpoint, stdlib `urllib`,
+in `scripts/summary.py`). Alleen in de data-job, nooit in de browser.
 
-- **Default model: `openai/gpt-4o-mini`** (`DEFAULT_MODEL` in `summary.py`).
-  Low-tier: snel/goedkoop, ruim genoeg voor een paar zinnen duiding op kale
-  dagcijfers.
-- **Override zonder code-wijziging:** env-var **`GITHUB_MODELS_MODEL`** in de
-  workflow (bijv. `openai/gpt-4o`). Token via Actions `GITHUB_TOKEN` +
-  `permissions: models: read`.
+- **Endpoint:** `https://opencode.ai/zen/go/v1/chat/completions` (Go-abonnement,
+  niet het pay-as-you-go Zen-endpoint).
+- **Default model: `mimo-v2.5`** (`DEFAULT_MODEL` in `summary.py`). Andere
+  Go-modellen zijn reasoning-modellen die `max_tokens` opsouperen aan verborgen
+  reasoning en de zichtbare tekst afkappen; `mimo-v2.5` levert consistent
+  complete NL-tekst binnen `max_tokens: 400`.
+- **Override zonder code-wijziging:** env-var **`OPENCODE_MODEL`** in de
+  workflow. Key via Actions secret **`OPENCODE_API_KEY`**.
 - **Parameters:** `temperature: 0` (stabiele diffs), `max_tokens: 400`.
-- **Rate limits** gelden per account/token, niet per repo. De cron doet ~4 calls
-  per dag (elke 6 u), wat ruim onder zelfs de gratis limieten zit (low-tier
-  ~150 req/dag; high-tier ~50 req/dag; een betaald Copilot-plan verhoogt dit).
-  GitHub Models staat los van Copilot "premium requests". Exacte tabel:
-  https://docs.github.com/en/github-models/prototyping-with-ai-models#rate-limits
+- **Kosten:** betaald maandabonnement; de cron doet ~4 calls/dag (elke 6 u),
+  verwaarloosbaar binnen het abonnement.
 - **Fail-safe:** bij elke fout geeft `generate_summary` `None` → forecast.json
   wordt zonder `summary` weggeschreven; de build breekt nooit.
