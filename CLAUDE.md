@@ -43,21 +43,24 @@ de data-job, nooit in de browser. GitHub Models is uitgefaseerd; dit verving het
 - **Endpoint:** `https://opencode.ai/zen/go/v1/chat/completions` (`ENDPOINT` in
   `summary.py`) — hoort bij het betaalde Go-abonnement
   (https://opencode.ai/docs/go/), niet het pay-as-you-go Zen-endpoint.
-- **Default model: `mimo-v2.5`** (`DEFAULT_MODEL` in `summary.py`). Gekozen na
-  live vergelijking van de Go-modellen op dit endpoint: veel ervan
-  (`deepseek-v4-flash`, `glm-5`, `kimi-k2.5`, …) zijn reasoning-modellen die hun
-  `reasoning_content` laten meetellen in `max_tokens` en daardoor de zichtbare
-  `content` afkappen (`finish_reason: "length"`, lege of afgebroken tekst).
-  `mimo-v2.5` levert het meest consistent complete, natuurlijke NL-tekst.
-  Verander dit niet zonder eerst met een losse curl-call te checken dat
-  `finish_reason` `"stop"` is en `content` niet leeg/afgekapt is.
-- **`mimo-v2.5` is zélf ook een reasoning-model.** `reasoning_content` telt mee
-  in `max_tokens`, en het verbruik daarvan is **niet stabiel bij
-  `temperature: 0`** — bij identieke prompts varieerde het in tests van ~200
-  tot ~550 reasoning-tokens. Daarom staat `MAX_TOKENS` in `summary.py` op
-  **1200** (ruime marge), niet op een krappe waarde — anders knipt de
-  samenvatting af zonder foutmelding (de fail-safe vangt dat stil op als lege
-  `content`, niet als exception).
+- **Default model: `grok-4.5`** (`DEFAULT_MODEL` in `summary.py`). Gekozen na
+  live vergelijking van de Go-modellen op de echte prompt: het schrijft het
+  meest natuurlijke, feitelijk kloppende NL en heeft geen reasoning-overhead
+  (~100 output-tokens, `finish_reason: "stop"`). De rest viel af: `mimo-v2.5`
+  schreef stroef en hallucineerde soms, `glm-5.2`/`deepseek-v4-pro` verstoken
+  700–1200 tokens aan verborgen reasoning (deepseek kapte daardoor af met lege
+  content), `qwen3.7-max` negeert `max_tokens`, `minimax-m3` lekt zijn
+  `<think>`-blok de zichtbare content in, en `kimi-k3` geeft HTTP 400 op dit
+  OpenAI-compatibele endpoint. Verander het model niet zonder eerst met een
+  losse curl-call te checken dat `finish_reason` `"stop"` is en `content` niet
+  leeg/afgekapt is.
+- **Reasoning-overhead is de valkuil bij modelkeuze.** Veel Go-modellen laten
+  `reasoning_content` meetellen in `max_tokens`, en dat verbruik is **niet
+  stabiel bij `temperature: 0`** (~200–550 tokens variatie bij identieke
+  prompts). Daarom staat `MAX_TOKENS` in `summary.py` op **1200** — grok-4.5
+  heeft dat zelf niet nodig, maar een override via `OPENCODE_MODEL` mogelijk
+  wel. Te krap = samenvatting knipt af zonder foutmelding (de fail-safe vangt
+  dat stil op als lege `content`, niet als exception).
 - **Override zonder code-wijziging:** env-var **`OPENCODE_MODEL`** in de
   workflow. Token via Actions secret **`OPENCODE_API_KEY`** (Bearer-token, geen
   `permissions:` nodig — geen GitHub-eigen API meer).

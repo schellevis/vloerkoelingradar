@@ -15,15 +15,20 @@ import urllib.request
 # https://opencode.ai/docs/go/). Werkt met een OpenCode API-key via
 # Authorization: Bearer <key> — geen third-party libs nodig, gewoon urllib.
 ENDPOINT = "https://opencode.ai/zen/go/v1/chat/completions"
-# mimo-v2.5: klein/snel model dat consistent bruikbare NL-tekst aflevert —
-# geverifieerd tegen de live API. Het is wél een reasoning-model: het verstopt
-# gedachtestappen in reasoning_content, dat meetelt in max_tokens. Het
-# tokenverbruik daarvan varieerde in tests van ~200 tot ~550 tokens bij
-# identieke prompts (temperature=0 voorkomt dat dus niet) — MAX_TOKENS heeft
-# daarom ruime marge. Andere Go-modellen (bv. deepseek-v4-flash, glm-5,
-# kimi-k2.5) hebben nog veel hogere/onvoorspelbaardere reasoning-overhead en
-# kapten de zichtbare content vaker af.
-DEFAULT_MODEL = "mimo-v2.5"
+# grok-4.5: beste NL-tekst van de Go-modellen in een live vergelijking op de
+# echte prompt (vloeiend, feitelijk correct, finish_reason "stop", ~100 tokens
+# zonder reasoning-overhead). De alternatieven vielen af: mimo-v2.5 schreef
+# stroef en hallucineerde soms ("overgang naar juli"), glm-5.2/deepseek-v4-pro
+# verstoken 700-1200 tokens aan verborgen reasoning (deepseek kapte daardoor
+# af met lege content), qwen3.7-max negeert max_tokens, minimax-m3 lekt zijn
+# <think>-blok de zichtbare content in en kimi-k3 zit niet achter dit
+# OpenAI-compatibele endpoint (HTTP 400). Bij een modelwissel: eerst met een
+# losse call checken dat finish_reason "stop" is en content niet leeg/afgekapt.
+DEFAULT_MODEL = "grok-4.5"
+# Ruime marge: reasoning-modellen laten reasoning_content meetellen in
+# max_tokens, en dat verbruik is niet stabiel bij temperature=0 (~200-550
+# tokens variatie gezien bij identieke prompts). grok-4.5 heeft de marge zelf
+# niet nodig, een override via OPENCODE_MODEL mogelijk wel.
 MAX_TOKENS = 1200
 
 # Drempels spiegelen web/config.js (levels). LEVELS_TEXT gaat in de prompt zodat
