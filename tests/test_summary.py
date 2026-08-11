@@ -1,8 +1,10 @@
 # tests/test_summary.py
+import io
 import json
 import os
 import tempfile
 import unittest
+from contextlib import redirect_stderr
 
 from scripts.summary import aggregate, build_prompt, call_opencode, generate_summary
 from scripts.fetch_forecast import run
@@ -111,6 +113,35 @@ class TestGenerateSummary(unittest.TestCase):
             raise OSError("netwerk weg")
 
         self.assertIsNone(generate_summary(FORECAST, token="t", days=2, urlopen=boom))
+
+    def test_falls_back_to_secondary_model_after_primary_call_fails(self):
+        models = []
+
+        def primary_fails(req, timeout=None):
+            model = json.loads(req.data.decode())["model"]
+            models.append(model)
+            if model == "grok-4.5":
+                raise OSError("primary endpoint unavailable")
+            return FakeResp({"choices": [{"message": {"content": "Fallback werkt."}}]})
+
+        summary = generate_summary(FORECAST, token="t", days=2, urlopen=primary_fails)
+
+        self.assertEqual(summary, "Fallback werkt.")
+        self.assertEqual(models, ["grok-4.5", "glm-5.2"])
+
+    def test_reports_call_failures_without_exposing_token(self):
+        def boom(req, timeout=None):
+            raise OSError("netwerk weg")
+
+        stderr = io.StringIO()
+        with redirect_stderr(stderr):
+            summary = generate_summary(
+                FORECAST, token="geheime-token", days=2, urlopen=boom
+            )
+
+        self.assertIsNone(summary)
+        self.assertIn("netwerk weg", stderr.getvalue())
+        self.assertNotIn("geheime-token", stderr.getvalue())
 
     def test_empty_text_is_none(self):
         self.assertIsNone(generate_summary(FORECAST, token="t", days=2, urlopen=reply("   ")))

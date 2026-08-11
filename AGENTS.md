@@ -12,7 +12,8 @@ in `scripts/summary.py`). Alleen in de data-job, nooit in de browser.
 
 - **Endpoint:** `https://opencode.ai/zen/go/v1/chat/completions` (Go-abonnement,
   niet het pay-as-you-go Zen-endpoint).
-- **Default model: `grok-4.5`** (`DEFAULT_MODEL` in `summary.py`): beste
+- **Default model: `grok-4.5`** (`DEFAULT_MODEL` in `summary.py`), met
+  **`glm-5.2` als eenmalige fallback** als de primaire call faalt: beste
   NL-tekst in een live vergelijking, geen reasoning-overhead (~100 tokens,
   `finish_reason: "stop"`). Veel andere Go-modellen souperen `max_tokens` op
   aan verborgen reasoning en kappen de zichtbare tekst af (of lekken
@@ -28,5 +29,6 @@ in `scripts/summary.py`). Alleen in de data-job, nooit in de browser.
 - **Parameters:** `temperature: 0` (stabiele diffs), `max_tokens: 1200`.
 - **Kosten:** betaald maandabonnement; de cron doet ~4 calls/dag (elke 6 u),
   verwaarloosbaar binnen het abonnement.
-- **Fail-safe:** bij elke fout geeft `generate_summary` `None` → forecast.json
-  wordt zonder `summary` weggeschreven; de build breekt nooit.
+- **Fail-safe:** als beide calls falen geeft `generate_summary` `None` →
+  forecast.json wordt zonder `summary` weggeschreven; de build breekt nooit.
+  De fouten staan wel op stderr in de Actions-log.

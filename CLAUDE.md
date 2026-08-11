@@ -43,7 +43,8 @@ de data-job, nooit in de browser. GitHub Models is uitgefaseerd; dit verving het
 - **Endpoint:** `https://opencode.ai/zen/go/v1/chat/completions` (`ENDPOINT` in
   `summary.py`) — hoort bij het betaalde Go-abonnement
   (https://opencode.ai/docs/go/), niet het pay-as-you-go Zen-endpoint.
-- **Default model: `grok-4.5`** (`DEFAULT_MODEL` in `summary.py`). Gekozen na
+- **Default model: `grok-4.5`** (`DEFAULT_MODEL` in `summary.py`), met
+  **`glm-5.2` als eenmalige fallback** als de primaire call faalt. Gekozen na
   live vergelijking van de Go-modellen op de echte prompt: het schrijft het
   meest natuurlijke, feitelijk kloppende NL en heeft geen reasoning-overhead
   (~100 output-tokens, `finish_reason: "stop"`). De rest viel af: `mimo-v2.5`
@@ -74,8 +75,10 @@ de data-job, nooit in de browser. GitHub Models is uitgefaseerd; dit verving het
 - **Kosten:** betaald maandabonnement (Go), geen per-request rate-limit-tabel
   zoals GitHub Models. De cron doet ~4 calls/dag (elke 6 u) met hooguit een
   paar duizend tokens per call — verwaarloosbaar binnen het abonnement.
-- **Fail-safe:** bij elke fout geeft `generate_summary` `None` → forecast.json
-  wordt zonder `summary` weggeschreven; de build breekt nooit.
+- **Fail-safe:** als beide modelcalls falen geeft `generate_summary` `None` →
+  forecast.json wordt zonder `summary` weggeschreven; de build breekt nooit.
+  Mislukte calls worden wel op stderr gelogd, zodat een groene Actions-run de
+  oorzaak niet langer verbergt.
 
 ## Bestandskaart
 

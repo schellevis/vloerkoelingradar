@@ -9,6 +9,7 @@ weggeschreven.
 """
 import json
 import statistics
+import sys
 import urllib.request
 
 # OpenAI-compatibel inferentie-endpoint van OpenCode Go (betaald abonnement,
@@ -25,6 +26,10 @@ ENDPOINT = "https://opencode.ai/zen/go/v1/chat/completions"
 # OpenAI-compatibele endpoint (HTTP 400). Bij een modelwissel: eerst met een
 # losse call checken dat finish_reason "stop" is en content niet leeg/afgekapt.
 DEFAULT_MODEL = "grok-4.5"
+# OpenCode Go kan een afzonderlijke upstream tijdelijk niet bereiken. GLM is
+# de bewezen secundaire route: dezelfde OpenAI-compatibele API, met voldoende
+# tokenmarge voor zijn reasoning-overhead.
+FALLBACK_MODEL = "glm-5.2"
 # Ruime marge: reasoning-modellen laten reasoning_content meetellen in
 # max_tokens, en dat verbruik is niet stabiel bij temperature=0 (~200-550
 # tokens variatie gezien bij identieke prompts). grok-4.5 heeft de marge zelf
@@ -168,6 +173,7 @@ def call_opencode(messages, token, *, model=DEFAULT_MODEL, endpoint=ENDPOINT,
 
 
 def generate_summary(forecast, *, token, days=4, model=DEFAULT_MODEL,
+                     fallback_model=FALLBACK_MODEL,
                      urlopen=urllib.request.urlopen):
     """Geeft een landelijke indruk-tekst of None als er iets misgaat."""
     try:
@@ -175,7 +181,17 @@ def generate_summary(forecast, *, token, days=4, model=DEFAULT_MODEL,
         if not agg:
             return None
         messages = build_prompt(agg, forecast.get("generated_at", ""))
-        text = call_opencode(messages, token, model=model, urlopen=urlopen)
-        return text or None
-    except Exception:  # noqa: BLE001 - samenvatting is optioneel; nooit de build breken
+    except Exception as exc:  # noqa: BLE001 - samenvatting blijft optioneel
+        print(f"AI-samenvatting voorbereiden mislukt: {exc}", file=sys.stderr)
         return None
+
+    models = dict.fromkeys((model, fallback_model))
+    for candidate in models:
+        try:
+            text = call_opencode(messages, token, model=candidate, urlopen=urlopen)
+            if text:
+                return text
+            print(f"AI-samenvatting via {candidate} gaf lege tekst", file=sys.stderr)
+        except Exception as exc:  # noqa: BLE001 - forecastjob mag niet stukgaan
+            print(f"AI-samenvatting via {candidate} mislukt: {exc}", file=sys.stderr)
+    return None
