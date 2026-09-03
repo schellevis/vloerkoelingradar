@@ -92,6 +92,7 @@ class TestCall(unittest.TestCase):
         def fake(req, timeout=None):
             seen["auth"] = req.get_header("Authorization")
             seen["user_agent"] = req.get_header("User-agent")
+            seen["session"] = req.get_header("X-opencode-session")
             seen["body"] = json.loads(req.data.decode())
             return FakeResp({"choices": [{"message": {"content": "  Prima koelweer.  "}}]})
 
@@ -101,6 +102,8 @@ class TestCall(unittest.TestCase):
         self.assertEqual(seen["body"]["temperature"], 0)
         # Cloudflare blokkeert urllib's default User-Agent (error 1010).
         self.assertNotIn("python-urllib", seen["user_agent"].lower())
+        # OpenCode Go vereist een x-opencode-session header.
+        self.assertEqual(seen["session"], "vloerkoelingradar-forecast-job")
 
 
 class TestGenerateSummary(unittest.TestCase):

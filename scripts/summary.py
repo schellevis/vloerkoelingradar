@@ -165,6 +165,9 @@ def call_opencode(messages, token, *, model=DEFAULT_MODEL, endpoint=ENDPOINT,
             # "Python-urllib/x.y" User-Agent (error 1010); een eigen waarde
             # is genoeg om erlangs te komen.
             "User-Agent": "vloerkoelingradar-forecast-job/1.0",
+            # OpenCode Go vereist een x-opencode-session header (één stabiel
+            # ID per conversatie) om de service te kunnen optimaliseren.
+            "x-opencode-session": "vloerkoelingradar-forecast-job",
         },
     )
     with urlopen(req, timeout=timeout) as resp:
